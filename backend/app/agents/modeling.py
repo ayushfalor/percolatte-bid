@@ -10,16 +10,13 @@ from __future__ import annotations
 from typing import Any
 
 from ..core.excel_engine import get_engine
-from ..core.workbook_reader import find_by_label
+from ..core.workbook_reader import key_cells
 from . import AgentContext, agent
 
 
 def _defaults(path: str, eng) -> tuple[str | None, str | None, str | None]:
-    has_named_tariff = any(n.upper() == "TARIFF" for n in eng.defined_names)
-    variable = "Tariff" if has_named_tariff else find_by_label({}, [r"^tariff"], path)
-    irr = find_by_label({}, [r"equity irr"], path)
-    dscr = find_by_label({}, [r"min(imum)? dscr"], path)
-    return variable, irr, dscr
+    cells = key_cells(path, eng.defined_names)
+    return cells["tariff"], cells["equity_irr"], cells["min_dscr"]
 
 
 @agent("engine", "Engine", "Win odds and profit at every price point; how they move with inputs")

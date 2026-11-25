@@ -5,6 +5,21 @@ from __future__ import annotations
 from typing import Any
 
 from .contracts import Finding, Fix
+from .patching import engine_for, merge
+from .workbook_reader import key_cells
+
+
+class AuditError(ValueError):
+    """The workbook does not give us what we need to price anything."""
+
+
+def _seek_cells(path: str, engine) -> tuple[str, str]:
+    """The tariff input to move and the equity IRR to hit."""
+    cells = key_cells(path, engine.defined_names)
+    variable, target = cells["tariff"], cells["equity_irr"]
+    if not variable or not target:
+        raise AuditError("Could not find a tariff input and an equity IRR output in this workbook")
+    return variable, target
 
 
 def audit_workbook(path: str, tender_facts: list[Any] | None = None) -> list[Finding]:
@@ -19,7 +34,13 @@ def audit_workbook(path: str, tender_facts: list[Any] | None = None) -> list[Fin
 
 def breakeven_with_fixes(path: str, fixes: list[Fix], target_irr: float = 0.14) -> float:
     """Breakeven tariff with these fixes applied to a temporary copy. Never writes to `path`."""
-    raise NotImplementedError("Phase 1: Auditor not built yet")
+    overrides, patches = merge(fixes)
+    engine = engine_for(path, patches)
+    variable, target = _seek_cells(path, engine)
+    result = engine.goal_seek(variable, target, target_irr, overrides=overrides)
+    if not result.converged:
+        raise AuditError(f"No tariff reaches {target_irr:.0%} on {target}: {result.message}")
+    return result.value
 
 
 def corrected_breakeven(path: str, target_irr: float = 0.14) -> float:

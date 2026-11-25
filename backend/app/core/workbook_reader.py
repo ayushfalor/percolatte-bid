@@ -186,6 +186,20 @@ def read_structure(path: str) -> dict[str, Any]:
     }
 
 
+def key_cells(path: str, defined_names: dict[str, str] | None = None) -> dict[str, str | None]:
+    """The three cells every module needs: the tariff input, equity IRR and minimum DSCR.
+
+    Found by label, so a workbook we have never seen resolves the same way the sample does.
+    A defined name called Tariff wins, because that is what the model's own formulas use.
+    """
+    named_tariff = any(name.upper() == "TARIFF" for name in (defined_names or {}))
+    return {
+        "tariff": "Tariff" if named_tariff else find_by_label({}, [r"^tariff"], path),
+        "equity_irr": find_by_label({}, [r"equity irr"], path),
+        "min_dscr": find_by_label({}, [r"min(imum)? dscr"], path),
+    }
+
+
 def find_by_label(structure: dict[str, Any], patterns: list[str], wb_path: str) -> str | None:
     """First cell whose left label matches any pattern (case-insensitive). Used for defaults only."""
     wb = load_workbook(wb_path, data_only=False)

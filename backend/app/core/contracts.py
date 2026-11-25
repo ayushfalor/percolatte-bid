@@ -21,8 +21,11 @@ class Fix:
       append   the template contains "{current}", which expands to whatever the cell
                holds now, formula or typed number. Used to add insurance to every
                cell of the O&M row, including a cell someone typed a number into.
+               Append only terms that are safe to tack on, such as "- cost".
       replace  the template is a complete formula. Used to restore a typed-over cell
                from its own row's pattern, translated to that cell's column.
+
+    Templates never carry the leading "=".
 
     A template is an "append" patch when "{current}" appears in it, a "replace" patch
     when it does not. Values that are plain numbers still go in `overrides`.
