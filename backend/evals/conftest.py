@@ -79,8 +79,27 @@ def wind_workbook(tmp_path_factory):
 
 
 @pytest.fixture(scope="session")
+def bugged_workbook(tmp_path_factory):
+    """The unseen wind model with the sample's two traps planted on a different layout."""
+    from evals.fixtures.make_workbooks import make_wind_with_planted_bugs
+
+    path = tmp_path_factory.mktemp("unseen") / "wind_bugged.xlsx"
+    truth = make_wind_with_planted_bugs(str(path))
+    return path, truth
+
+
+@pytest.fixture(scope="session")
 def api_url() -> str:
     url = os.environ.get("API_URL")
     if not url:
         pytest.skip("API_URL not set (stack tests run in CI and via `make eval`)")
     return url.rstrip("/")
+
+
+@pytest.fixture(scope="module")
+def api_client(api_url):
+    """HTTP client for stack tests that live beside their phase's other evals."""
+    import httpx
+
+    with httpx.Client(base_url=api_url, timeout=120) as client:
+        yield client

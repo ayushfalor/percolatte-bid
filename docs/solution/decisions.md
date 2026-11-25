@@ -38,3 +38,26 @@ CI forever after. Gave up: nothing; it is a single number in a file.
 **D-009 Docs in the repo; raw notes private.**
 Why: reviewers see distilled, checked documents. Raw call notes and AI chat exports go in `notes/`
 (git-ignored).
+
+**D-010 Fixes apply as formula patches on a temporary copy, not only as value overrides.**
+Why: some fixes cannot be written as a value. Insurance (Inputs!C28) has no cell anywhere in the
+model to override, so wiring it means adding a term to every cell of the O&M row. Restoring the
+typed-over year-6 O&M cell means putting the row's formula back, not typing the number it happens
+to produce today, which would go stale the moment an O&M input changed. So a fix carries two kinds
+of patch. An **append** patch has `{current}` in its template, which expands to whatever the cell
+holds now, formula or typed number; that is how insurance reaches all 25 years including the year
+someone typed over. A **replace** patch is a complete formula, rebuilt from the row's own pattern
+and translated to the target column. Patches are written to a copy of the workbook in a temp
+directory and recalculated by our engine. The uploaded file is never opened for writing.
+Order matters when fixes combine: every replace patch lands first, then every append patch
+expands `{current}` against the result. Do it the other way round and restoring the year-6
+formula silently drops the insurance that was just added to that cell.
+Gave up: pure in-memory overrides. We now pay one workbook recompile per distinct patch set, so
+compiled engines are cached by file hash plus the sorted patch set.
+
+**D-011 `corrected_breakeven` applies only fixes that are certain, and excludes assumed numbers.**
+Why: the number has to mean "what the model says once the things we are sure about are right".
+Re-pricing modules at the mock INR 10/Wp (A-03) moves the breakeven by about 37 paise, which would
+swamp everything else and bake an assumption into a headline figure. It stays a lever instead.
+Gave up: a single number that includes the ALMM upside; the bridge on the Bid Brief shows it as its
+own step.

@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from .contracts import Finding
+from .contracts import Finding, Fix
 
 
 def audit_workbook(path: str, tender_facts: list[Any] | None = None) -> list[Finding]:
@@ -16,11 +16,24 @@ def audit_workbook(path: str, tender_facts: list[Any] | None = None) -> list[Fin
     raise NotImplementedError("Phase 1: Auditor not built yet")
 
 
+def breakeven_with_fixes(path: str, fixes: list[Fix], target_irr: float = 0.14) -> float:
+    """Breakeven tariff with these fixes applied to a temporary copy. Never writes to `path`."""
+    raise NotImplementedError("Phase 1: Auditor not built yet")
+
+
 def corrected_breakeven(path: str, target_irr: float = 0.14) -> float:
-    """Breakeven tariff after applying every 'high' finding's fix as overrides."""
+    """Breakeven tariff after applying every fix that is certain from the model or the tender.
+
+    A fix is excluded when its impact rests on an assumed number (the finding carries
+    ASSUMPTIONS ids), so the ALMM module re-price stays out of this number and lives as
+    a lever instead.
+    """
     raise NotImplementedError("Phase 1: Auditor not built yet")
 
 
 def tornado(path: str, top_n: int = 8) -> list[dict[str, Any]]:
-    """Which inputs move the breakeven most: [{"cell", "label", "low", "high", "swing"}], sorted by swing."""
+    """Which inputs move the breakeven most: [{"cell", "label", "low", "high", "swing"}], sorted by swing.
+
+    Labels come from the row text or the column header, whichever names the input (Phase 1).
+    """
     raise NotImplementedError("Phase 1: Auditor not built yet")

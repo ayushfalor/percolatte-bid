@@ -51,12 +51,28 @@ browser -> web (nginx + React) -> api (FastAPI) -> db (Postgres 16)
 
 No LLM orchestrator: the pipeline is plain code with versions.
 
+### Fixes never edit the file
+
+A finding's fix is a set of value overrides plus formula patches, applied to a copy of the workbook
+in a temp directory and recalculated by our engine (D-010). Overrides alone are not enough: wiring
+insurance means adding a term to every cell of the O&M row, because the model has no insurance cell
+to override, and restoring a typed-over cell means putting the row's formula back rather than
+typing today's answer into it. So a patch is either an **append**, whose template contains
+`{current}` and expands to whatever the cell holds now, or a **replace**, which is a complete
+formula rebuilt from the row's pattern. The uploaded file is never opened for writing.
+
+`corrected_breakeven` applies every fix that is certain from the model or the tender, and excludes
+any fix whose impact rests on an assumed number (D-011). On the sample that is the year-6 O&M
+formula, insurance at 0.25% of capex and 8,766 hours, giving INR 2.6465 against INR 2.6039 as
+received. The ALMM module re-price is worth about 37 paise more but rests on A-03, so it stays a
+lever on the War Room rather than part of this number.
+
 ## The main engine
 
 ### Profit side (no randomness)
 Run the user's workbook through our formula engine across tariffs (every 5 paise, interpolate,
 recompute exactly at the recommended prices). For each tariff: equity IRR, minimum DSCR and equity
-value above the hurdle. With "apply fixes" on, the Auditor's fixes are applied as overrides.
+value above the hurdle. With "apply fixes" on, the Auditor's fixes are applied as overrides and formula patches on a copy (D-010).
 
 ### Win side (Monte Carlo)
 1. **Rival draws.** The frozen snapshot holds about 5,000 joint draws of the whole field: who shows

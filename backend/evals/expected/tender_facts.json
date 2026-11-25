@@ -23,6 +23,7 @@
     {"field": "era_extension_minutes", "value": 8, "unit": "minutes", "clause": "40.4", "pdf_page": 52, "quote": "auto extension by 8 (eight) minutes"},
     {"field": "partial_refusal_threshold", "value": 0.5, "unit": "of quoted capacity", "clause": "41.4", "pdf_page": 53, "quote": "lower than 50% of the total quoted capacity"},
     {"field": "almm_exempt", "value": true, "unit": "flag", "clause": "3.3", "pdf_page": 9, "quote": "exemption from Approved List of Models and Manufacturers (ALMM) requirements"},
+    {"field": "almm_exempt_confirmed", "value": true, "unit": "flag", "clause": "35.2", "pdf_page": 45, "quote": "exempted from compliance with the ALMM requirements"},
     {"field": "sez_status_loss_not_force_majeure", "value": true, "unit": "flag", "clause": "20.11", "pdf_page": 29, "quote": "these risks do not constitute a"},
     {"field": "trading_margin", "value": 0.07, "unit": "INR/kWh", "clause": "43.64", "pdf_page": 61, "quote": "shall be @ INR 0.07/kWh"},
     {"field": "net_worth_per_mw", "value": 8000000, "unit": "INR/MW", "clause": "36.1", "pdf_page": 45, "quote": "INR 80,00,000/MW (Indian Rupees Eighty Lakh/MW Only)"},
