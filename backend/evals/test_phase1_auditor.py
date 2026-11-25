@@ -24,6 +24,17 @@ def findings(samples):
     return audit_workbook(str(samples / "bid_model.xlsx"), tender_facts=FACTS)
 
 
+@pytest.fixture(scope="module")
+def tornado_rows(samples):
+    """Computed once: the assertions below all read the same ranking.
+
+    test_tornado_is_fast_enough deliberately does not use this, because it times a real call.
+    """
+    from app.core.audit import tornado
+
+    return tornado(str(samples / "bid_model.xlsx"), top_n=12)
+
+
 def _one(findings, key: str):
     """The single finding for an 'id:where' key from the golden file."""
     want_id, where = key.split(":", 1)
@@ -158,11 +169,9 @@ def test_fixes_never_touch_the_file(samples):
 # ---------- labels and the tornado ----------
 
 
-def test_labels_come_from_column_headers_when_the_row_text_is_not_the_name(samples):
+def test_labels_come_from_column_headers_when_the_row_text_is_not_the_name(tornado_rows):
     """Scenarios!D5 sits in the 'Base' row under the 'CUF (AC)' header. The header names it."""
-    from app.core.audit import tornado
-
-    rows = {r["cell"]: r["label"] for r in tornado(str(samples / "bid_model.xlsx"), top_n=12)}
+    rows = {r["cell"]: r["label"] for r in tornado_rows}
     for cell, label in EXPECTED["labels"].items():
         if cell.startswith("_"):
             continue
@@ -170,20 +179,16 @@ def test_labels_come_from_column_headers_when_the_row_text_is_not_the_name(sampl
         assert label.lower() in rows[cell].lower(), f"{cell} labelled {rows[cell]!r}, expected {label!r}"
 
 
-def test_tornado_ranks_the_drivers(samples):
-    from app.core.audit import tornado
-
-    rows = tornado(str(samples / "bid_model.xlsx"))
+def test_tornado_ranks_the_drivers(tornado_rows):
+    rows = tornado_rows
     assert len(rows) >= 6
     swings = [r["swing"] for r in rows]
     assert swings == sorted(swings, reverse=True)
     assert {"Scenarios!D5", "Inputs!C8"} & {r["cell"] for r in rows[:2]}, "CUF should be a top-2 driver"
 
 
-def test_tornado_rows_are_labelled_and_live(samples):
-    from app.core.audit import tornado
-
-    rows = tornado(str(samples / "bid_model.xlsx"))
+def test_tornado_rows_are_labelled_and_live(tornado_rows):
+    rows = tornado_rows
     dead = {c["where"] for c in EXPECTED["auditor_targets"] if c["id"] in {"orphan_input", "cosmetic_input"}}
     for r in rows:
         assert r["label"] and r["label"].strip(), r["cell"]

@@ -60,8 +60,23 @@ def formula_refs(formula: str, sheet: str, names: dict[str, str]) -> list[tuple[
 
 
 def _label_left(ws, row: int, col: int) -> str | None:
-    for c in range(col - 1, 0, -1):
+    """The row's caption: the leftmost text on the row, left of this cell.
+
+    Leftmost, not nearest, because models keep captions in a first column and put qualifiers
+    in between. Scanning back from the cell gives Capex!D5 the basis "per MWp"; the caption
+    column gives it "PV modules", which is what the cell is actually called.
+    """
+    for c in range(1, col):
         v = ws.cell(row=row, column=c).value
+        if isinstance(v, str) and v.strip() and not v.startswith("="):
+            return v.strip()
+    return None
+
+
+def _label_above(ws, row: int, col: int) -> str | None:
+    """The nearest text above a cell in its own column: a table's column header."""
+    for r in range(row - 1, 0, -1):
+        v = ws.cell(row=r, column=col).value
         if isinstance(v, str) and v.strip() and not v.startswith("="):
             return v.strip()
     return None
@@ -80,6 +95,22 @@ def _is_axis(values: list[Any]) -> bool:
         return False
     diffs = {int(b) - int(a) for a, b in pairwise(nums)}
     return diffs == {1}
+
+
+def _name_of(ws, cell, row_numbers: list[Any]) -> tuple[str | None, str]:
+    """What this cell is called, and where the name came from.
+
+    A parameter list has one number per row, so the text to its left names it ("Interest rate").
+    A table of records has several numbers on a row, so the row text is the record's name and the
+    column header is what names the cell: Scenarios!D5 is the CUF of the "Base" scenario, and the
+    useful label is "CUF (AC)", not "Base".
+    """
+    left = _label_left(ws, cell.row, cell.column)
+    above = _label_above(ws, cell.row, cell.column)
+    is_record_row = len(row_numbers) > 1 and not _is_axis(row_numbers)
+    if is_record_row and above:
+        return above, "column"
+    return (left, "row") if left else (above, "column")
 
 
 def read_structure(path: str) -> dict[str, Any]:
@@ -153,19 +184,23 @@ def read_structure(path: str) -> dict[str, Any]:
     for sheet, coord in numbers:
         ws = wbf[sheet]
         cell = ws[coord]
+        label, label_source = _name_of(ws, cell, by_row[(sheet, cell.row)])
+        on_axis = _is_axis(by_row[(sheet, cell.row)]) or _is_axis(by_col[(sheet, cell.column)])
         entry = {
             "cell": f"{sheet}!{coord}",
             "value": cell.value,
-            "label": _label_left(ws, cell.row, cell.column),
+            "label": label,
+            "label_source": label_source,
             "unit": _unit_right(ws, cell.row, cell.column),
             "number_format": cell.number_format,
             "dependents": refs_into.get((sheet, coord), 0),
+            "axis": on_axis,
         }
         if cell.comment:
             entry["comment"] = cell.comment.text.strip()
         if entry["dependents"] > 0:
             inputs.append(entry)
-        elif sheet in live and not _is_axis(by_row[(sheet, cell.row)]) and not _is_axis(by_col[(sheet, cell.column)]):
+        elif sheet in live and not on_axis:
             unused.append(entry)
 
     inputs.sort(key=lambda e: -e["dependents"])
