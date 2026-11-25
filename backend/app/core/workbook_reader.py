@@ -221,6 +221,15 @@ def read_structure(path: str) -> dict[str, Any]:
     }
 
 
+def label_for(book, ref: str) -> str | None:
+    """What one cell is called, on an already-loaded workbook. Same rule as read_structure."""
+    sheet, coord = ref.rsplit("!", 1)
+    ws = book[sheet]
+    cell = ws[coord]
+    row_numbers = [c.value for c in ws[cell.row] if isinstance(c.value, (int, float)) and not isinstance(c.value, bool)]
+    return _name_of(ws, cell, row_numbers)[0]
+
+
 def key_cells(path: str, defined_names: dict[str, str] | None = None) -> dict[str, str | None]:
     """The three cells every module needs: the tariff input, equity IRR and minimum DSCR.
 

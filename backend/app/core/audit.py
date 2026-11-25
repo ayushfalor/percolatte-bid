@@ -2,10 +2,16 @@
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
+from openpyxl import load_workbook
+
+from . import checks
 from .contracts import Finding, Fix
-from .patching import engine_for, merge
+from .excel_engine import EngineError
+from .model_map import formula_runs
+from .patching import engine_for, file_hash, merge
 from .workbook_reader import key_cells, read_structure
 
 SWING = 0.10  # how far each driver is moved either way, as a share of its own value
@@ -13,6 +19,15 @@ SLOPE_STEP = 0.02  # tariff step used to measure the local IRR slope
 EXACT_ROWS = 3  # how many of the top drivers get a real goal seek instead of the estimate
 FLAT = 1e-6  # a swing at or below this is no swing at all, in INR/kWh
 BRACKET = 0.25  # INR/kWh either side of the estimate, handed to the solver so it skips its own search
+SEVERITY_ORDER = {"high": 0, "medium": 1, "low": 2, "info": 3}
+CHECKS = (
+    checks.typed_over_findings,
+    checks.truncated_range_findings,
+    checks.unused_input_findings,
+    checks.stale_note_findings,
+    checks.whole_number_percent_findings,
+    checks.legacy_sheet_findings,
+)
 
 
 class AuditError(ValueError):
@@ -28,35 +43,94 @@ def _seek_cells(path: str, engine) -> tuple[str, str]:
     return variable, target
 
 
-def audit_workbook(path: str, tender_facts: list[Any] | None = None) -> list[Finding]:
+def _model(path: str, target_irr: float) -> checks.Model:
+    """Read the workbook once and hand every check the same picture of it."""
+    engine = engine_for(path)
+    base = breakeven_with_fixes(path, [], target_irr=target_irr)
+
+    def price(fix: Fix) -> float | None:
+        try:
+            return breakeven_with_fixes(path, [fix], target_irr=target_irr) - base
+        except (AuditError, EngineError, ValueError):
+            return None
+
+    return checks.Model(
+        path=path,
+        book=load_workbook(path, data_only=False),
+        structure=read_structure(path),
+        runs=formula_runs(path),
+        value_of=engine.current_value,
+        price=price,
+        breakeven=base,
+    )
+
+
+def audit_workbook(path: str, tender_facts: list[Any] | None = None, target_irr: float = 0.14) -> list[Finding]:
     """Return every finding, each with evidence, severity, INR/kWh impact and a fix-as-scenario.
 
     Must work on any workbook (no hardcoded cells). Checks: hardcode inside a formula row,
     truncated ranges vs sibling aggregates, unused inputs, cosmetic inputs, stale notes,
     whole-number percents, legacy sheets, and (with tender facts) tender-vs-model mismatches.
     """
-    raise NotImplementedError("Phase 1: Auditor not built yet")
+    model = _model(path, target_irr)
+    findings = [finding for check in CHECKS for finding in check(model)]
+    findings.extend(checks.tender_findings(model, tender_facts or []))
+    return sorted(findings, key=_worst_first)
+
+
+def _worst_first(finding: Finding) -> tuple[int, float, str]:
+    """Most serious first, then the biggest number, so the UI can show the list as it comes."""
+    return (SEVERITY_ORDER[finding.severity], -abs(finding.impact_inr_per_kwh or 0.0), finding.where)
+
+
+_solved: dict[str, float] = {}
+_SOLVED_MAX = 256
 
 
 def breakeven_with_fixes(path: str, fixes: list[Fix], target_irr: float = 0.14) -> float:
-    """Breakeven tariff with these fixes applied to a temporary copy. Never writes to `path`."""
+    """Breakeven tariff with these fixes applied to a temporary copy. Never writes to `path`.
+
+    The answer is a pure function of the file, the fixes and the hurdle, so it is remembered.
+    An audit prices every fix and the corrected breakeven then applies a subset of the same
+    fixes, which would otherwise solve the same thing twice.
+    """
     overrides, patches = merge(fixes)
+    key = json.dumps([file_hash(path), patches, overrides, target_irr], sort_keys=True, default=str)
+    if key in _solved:
+        return _solved[key]
     engine = engine_for(path, patches)
     variable, target = _seek_cells(path, engine)
     result = engine.goal_seek(variable, target, target_irr, overrides=overrides)
     if not result.converged:
         raise AuditError(f"No tariff reaches {target_irr:.0%} on {target}: {result.message}")
+    if len(_solved) >= _SOLVED_MAX:
+        _solved.pop(next(iter(_solved)))
+    _solved[key] = result.value
     return result.value
 
 
-def corrected_breakeven(path: str, target_irr: float = 0.14) -> float:
+def corrected_breakeven(path: str, tender_facts: list[Any] | None = None, target_irr: float = 0.14) -> float:
     """Breakeven tariff after applying every fix that is certain from the model or the tender.
 
     A fix is excluded when its impact rests on an assumed number (the finding carries
     ASSUMPTIONS ids), so the ALMM module re-price stays out of this number and lives as
     a lever instead.
+
+    Pass the tender facts to include the model-versus-tender fixes. Without them this is the
+    model checked against itself, which is all we can honestly do with no tender in hand.
     """
-    raise NotImplementedError("Phase 1: Auditor not built yet")
+    findings = audit_workbook(path, tender_facts=tender_facts, target_irr=target_irr)
+    return corrected_breakeven_from(path, findings, target_irr=target_irr)
+
+
+def corrected_breakeven_from(path: str, findings: list[Finding], target_irr: float = 0.14) -> float:
+    """The same number from findings already in hand, so a caller does not audit twice."""
+    return breakeven_with_fixes(path, [f.fix for f in findings if _is_certain(f)], target_irr=target_irr)
+
+
+def _is_certain(finding: Finding) -> bool:
+    """A fix we can apply without assuming anything, and that moves the number (D-011)."""
+    return bool(finding.fix) and not finding.assumptions and bool(finding.impact_inr_per_kwh)
 
 
 def _drivers(path: str, variable_cell: str) -> list[dict[str, Any]]:

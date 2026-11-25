@@ -8,15 +8,17 @@ from __future__ import annotations
 
 import time
 import uuid
+from dataclasses import asdict
 
 from fastapi import APIRouter, HTTPException
 
 from ..core import auction_rules as rules
+from ..core.audit import audit_workbook, breakeven_with_fixes, corrected_breakeven_from, tornado
 from ..core.excel_engine import EngineError
 from ..core.workbook_reader import read_structure
 from ..files import materialize
 from ..schemas import AllocateIn, EvaluateIn, EvaluateOut, GoalSeekIn, GoalSeekOut, ShortlistIn
-from .deps import load_document, workbook_engine
+from .deps import latest_tender_facts, load_document, workbook_engine
 
 router = APIRouter(prefix="/api", tags=["tools"])
 
@@ -51,6 +53,37 @@ def goal_seek(document_id: uuid.UUID, body: GoalSeekIn):
     except EngineError as exc:
         raise HTTPException(422, str(exc)) from exc
     return GoalSeekOut(**r.__dict__)
+
+
+@router.get("/workbooks/{document_id}/findings")
+def findings(document_id: uuid.UUID):
+    """What is wrong with this model, priced in INR/kWh, with a fix for each.
+
+    Tender mismatches need tender facts. Until the tender agent lands in Phase 2 there are none,
+    so this returns the model checked against itself.
+    """
+    doc = load_document(document_id)
+    if doc.kind not in ("workbook", "history"):
+        raise HTTPException(400, f"Document is a {doc.kind}, not a workbook")
+    ext = "." + doc.filename.rsplit(".", 1)[-1].lower()
+    path = materialize(doc.sha256, ext, doc.content)
+    facts = latest_tender_facts()
+    found = audit_workbook(path, tender_facts=facts)
+    return {
+        "document_id": str(document_id),
+        "tender_facts_used": len(facts),
+        "breakeven_as_received": breakeven_with_fixes(path, []),
+        "corrected_breakeven": corrected_breakeven_from(path, found),
+        "findings": [asdict(f) for f in found],
+    }
+
+
+@router.get("/workbooks/{document_id}/drivers")
+def drivers(document_id: uuid.UUID, top_n: int = 8):
+    """Which inputs move the breakeven most, worst first."""
+    doc = load_document(document_id)
+    ext = "." + doc.filename.rsplit(".", 1)[-1].lower()
+    return {"drivers": tornado(materialize(doc.sha256, ext, doc.content), top_n=top_n)}
 
 
 @router.get("/workbooks/{document_id}/parity")

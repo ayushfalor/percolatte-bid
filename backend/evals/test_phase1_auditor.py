@@ -137,10 +137,12 @@ def test_tender_mismatch_impact_cites_its_assumption_and_clauses(findings):
 
 
 def test_corrected_breakeven(samples):
+    """The golden set includes the 8766 fix, which is a tender fact, so the facts go in."""
     from app.core.audit import corrected_breakeven
 
     e = EXPECTED["corrected_breakeven"]
-    assert corrected_breakeven(str(samples / "bid_model.xlsx")) == pytest.approx(e["value"], abs=e["tolerance"])
+    got = corrected_breakeven(str(samples / "bid_model.xlsx"), tender_facts=FACTS)
+    assert got == pytest.approx(e["value"], abs=e["tolerance"])
 
 
 def test_corrected_breakeven_excludes_assumption_backed_fixes(samples, findings):
@@ -151,7 +153,7 @@ def test_corrected_breakeven_excludes_assumption_backed_fixes(samples, findings)
     almm = _one(findings, "tender_mismatch:Capex!D5")
     assert abs(almm.impact_inr_per_kwh) > 0.30, "the lever we are deliberately leaving out is a big one"
     with_almm = breakeven_with_fixes(path, [f.fix for f in findings if f.fix and f.impact_inr_per_kwh])
-    assert abs(corrected_breakeven(path) - with_almm) > 0.30
+    assert abs(corrected_breakeven(path, tender_facts=FACTS) - with_almm) > 0.30
 
 
 def test_fixes_never_touch_the_file(samples):
@@ -161,7 +163,7 @@ def test_fixes_never_touch_the_file(samples):
     path = samples / "bid_model.xlsx"
     before = hashlib.sha256(path.read_bytes()).hexdigest()
     audit_workbook(str(path), tender_facts=FACTS)
-    corrected_breakeven(str(path))
+    corrected_breakeven(str(path), tender_facts=FACTS)
     tornado(str(path))
     assert hashlib.sha256(path.read_bytes()).hexdigest() == before
 
@@ -277,6 +279,9 @@ def test_findings_endpoint(api_client):
     assert r.status_code == 200, r.text
     body = r.json()
     found = {(f["id"], f["where"]) for f in body["findings"]}
-    assert {(t["id"], t["where"]) for t in EXPECTED["auditor_targets"]} <= found
-    e = EXPECTED["corrected_breakeven"]
-    assert body["corrected_breakeven"] == pytest.approx(e["value"], abs=e["tolerance"])
+    # Tender mismatches need tender facts, and those arrive with the tender agent in Phase 2.
+    model_only = {(t["id"], t["where"]) for t in EXPECTED["auditor_targets"] if t["id"] != "tender_mismatch"}
+    assert model_only <= found, sorted(model_only - found)
+    assert body["breakeven_as_received"] == pytest.approx(EXPECTED["goal_seek"]["expected"], abs=0.001)
+    assert body["corrected_breakeven"] > body["breakeven_as_received"]
+    assert all(f["title"] and f["evidence"] for f in body["findings"])

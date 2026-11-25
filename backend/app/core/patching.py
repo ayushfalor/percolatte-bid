@@ -41,7 +41,8 @@ def _root() -> str:
     return _temp_root
 
 
-def _file_hash(path: str) -> str:
+def file_hash(path: str) -> str:
+    """Identifies the file itself, so a cache key never survives the file changing."""
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()[:16]
 
 
@@ -100,7 +101,7 @@ def engine_for(path: str, patches: dict[str, str] | None = None) -> WorkbookEngi
     """
     if not patches:
         return get_engine(path)
-    key = f"{_file_hash(path)}:{json.dumps(patches, sort_keys=True)}"
+    key = f"{file_hash(path)}:{json.dumps(patches, sort_keys=True)}"
     digest = hashlib.sha256(key.encode()).hexdigest()[:16]
     with _lock:
         cached = _cache.get(digest)
