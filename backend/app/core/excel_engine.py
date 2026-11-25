@@ -25,6 +25,7 @@ os.environ.setdefault("TQDM_DISABLE", "1")  # formulas shows progress bars while
 
 import formulas
 from openpyxl import load_workbook
+from openpyxl.formula.tokenizer import Token, Tokenizer
 
 from .workbook_reader import formula_refs, sheet_extents
 
@@ -87,6 +88,36 @@ def _plain(value: Any) -> Any:
     if value is None or isinstance(value, (bool, int, float, str)):
         return value
     return str(value)  # Excel errors (#DIV/0!, #NUM!) come back as strings
+
+
+def used_functions(path: str) -> dict[str, list[str]]:
+    """Every worksheet function the workbook calls, and the cells that call it."""
+    book = load_workbook(path, data_only=False)
+    found: dict[str, list[str]] = {}
+    for ws in book.worksheets:
+        for row in ws.iter_rows():
+            for cell in row:
+                if not (isinstance(cell.value, str) and cell.value.startswith("=")):
+                    continue
+                try:
+                    tokens = Tokenizer(cell.value).items
+                except Exception:  # a formula we cannot tokenize tells us nothing about functions
+                    continue
+                for tok in tokens:
+                    if tok.type == Token.FUNC and tok.subtype == Token.OPEN:
+                        name = tok.value.rstrip("(").upper().lstrip("_XLFN.")
+                        found.setdefault(name, []).append(f"{ws.title}!{cell.coordinate}")
+    return found
+
+
+def unsupported_functions(used: dict[str, list[str]]) -> dict[str, list[str]]:
+    """Of those, the ones our formula library has no implementation for.
+
+    Asked of the library's own registry rather than a list we keep by hand, so this stays right
+    when the library gains a function.
+    """
+    known = set(formulas.get_functions())
+    return {name: cells for name, cells in used.items() if name not in known}
 
 
 def _strongly_connected(graph: dict[str, set[str]]) -> list[list[str]]:
@@ -195,6 +226,8 @@ class WorkbookEngine:
                     if c.value is not None:
                         self.initial_values[f"{ws.title}!{c.coordinate}"] = c.value
 
+        self.functions_used = used_functions(path)
+        self.unsupported = unsupported_functions(self.functions_used)
         self.cycles = find_cycles(path)
         self.cycle_report = [{"cells": cycle, "text": describe_cycle(cycle)} for cycle in self.cycles]
         self._cycle_cells = [c for cycle in self.cycles if len(cycle) <= CYCLE_MAX_CELLS for c in cycle]

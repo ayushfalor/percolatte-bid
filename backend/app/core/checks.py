@@ -12,14 +12,14 @@ from __future__ import annotations
 import re
 from collections import Counter
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 from openpyxl.formula.tokenizer import Token, Tokenizer
 from openpyxl.utils.cell import coordinate_to_tuple, get_column_letter, range_boundaries
 
 from .contracts import Finding, Fix
-from .model_map import Run, cost_series, typed_over
+from .model_map import Run, operating_cost, typed_over
 
 AGGREGATES = ("IRR", "XIRR", "NPV", "SUM", "MIN", "MAX", "AVERAGE", "MEDIAN", "COUNT")
 REFERENCE_WORDS = re.compile(r"\b(target|hurdle|goal|benchmark|threshold|covenant)\b", re.I)
@@ -30,6 +30,8 @@ NUMBER = re.compile(r"\d+(?:\.\d+)?")
 PER_UNIT = re.compile(r"/\s*(mw|mwp|kw|wp|unit|kwh)\b", re.I)
 WHOLE_DECLARED = re.compile(r"whole|integer|\bno\.?\b", re.I)
 MODULE_PRICE = re.compile(r"(?:INR|Rs\.?)\s*([\d.]+)\s*/\s*Wp", re.I)
+
+CURRENT_TOKEN = "{current}"  # what an append patch expands to; see contracts.Fix
 
 STALE_BAND = 0.20  # a noted number this close to the live answer is talking about the same thing
 STALE_TOLERANCE = 0.005  # and this far from it is out of date
@@ -47,6 +49,14 @@ class Model:
     value_of: Callable[[str], Any]
     price: Callable[[Fix], float | None]
     breakeven: float
+    tariff: str = ""
+    unsupported: dict[str, list[str]] = field(default_factory=dict)
+    cycle_report: list[dict[str, Any]] = field(default_factory=list)
+
+    @property
+    def untrusted_cells(self) -> set[str]:
+        """Cells our formula library cannot evaluate, so nothing downstream of them is a number."""
+        return {cell for cells in self.unsupported.values() for cell in cells}
 
 
 def _ref(sheet: str, coord: str) -> str:
@@ -278,17 +288,16 @@ def _wire_percent_of(model: Model, entry: dict[str, Any]) -> tuple[Fix, str] | N
     base = _wiring_base(model, match.group(1).strip())
     if base is None:
         return None
-    run = cost_series(model.path, model.runs, model.value_of)
-    if run is None:
+    found = operating_cost(model.path, model.runs, model.tariff) if model.tariff else None
+    if found is None:
         return None
-    values = [model.value_of(ref) for ref in run.refs]
-    numbers = [v for v in values if isinstance(v, (int, float))]
-    if not numbers:
-        return None
-    sign = "-" if sum(numbers) < 0 else "+"
+    run, operator = found
+    # The margin's operator says how this model stores costs. "revenue + cost" means costs are
+    # negative, so charging more makes the row more negative. "revenue - cost" means the opposite.
+    sign = "-" if operator == "+" else "+"
     term = f"{sign}{_absolute(base['cell'])}*{_absolute(entry['cell'])}"
     fix = Fix(
-        formula_patches=dict.fromkeys(run.refs, "{current}" + term),
+        formula_patches=dict.fromkeys(run.refs, f"({CURRENT_TOKEN})" + term),
         note=f"Charge it in {run.sheet} {_line_name(run)} against {base['label']}, every period.",
     )
     return fix, base["label"]
@@ -551,3 +560,43 @@ def tender_findings(model: Model, facts: list[Any]) -> list[Finding]:
     by_field = {str(_field(f, "field")): f for f in facts}
     almm = [f for f in facts if str(_field(f, "field", "")).startswith("almm_exempt")]
     return _hours_mismatch(model, by_field.get("cuf_hours_per_year")) + _almm_mismatch(model, almm)
+
+
+# ---------- formulas we cannot evaluate ----------
+
+
+def unsupported_function_findings(model: Model) -> list[Finding]:
+    """Say which function and which cell, rather than quietly returning a wrong number.
+
+    The cell comes back as #NAME?. Everything that does not read it is still trustworthy, so the
+    rest of the audit carries on and only the numbers that would depend on it are withheld.
+    """
+    return [
+        Finding(
+            id="unsupported_function",
+            where=cells[0],
+            severity="medium",
+            title=f"{name} is not supported by our formula engine",
+            evidence=(
+                f"{name} is used in {len(cells)} cell(s): {', '.join(cells[:6])}"
+                f"{' and others' if len(cells) > 6 else ''}. Those cells read #NAME? here, so any "
+                f"number that depends on them is withheld rather than guessed."
+            ),
+        )
+        for name, cells in sorted(model.unsupported.items())
+    ]
+
+
+def circular_reference_findings(model: Model) -> list[Finding]:
+    """A loop we solved by iteration, so the reviewer knows the number came from repeating it."""
+    return [
+        Finding(
+            id="circular_reference",
+            where=cycle["cells"][0],
+            severity="info",
+            title="A circular reference, solved by repeating until it settled",
+            evidence=cycle["text"] + " Excel calls this iterative calculation; we do the same.",
+            impact_inr_per_kwh=0.0,
+        )
+        for cycle in model.cycle_report
+    ]

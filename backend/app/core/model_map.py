@@ -13,10 +13,12 @@ one idea answers most of what the Auditor needs to ask.
 
 from __future__ import annotations
 
+from collections import Counter, defaultdict
 from dataclasses import dataclass
 from typing import Any
 
 from openpyxl import load_workbook
+from openpyxl.formula.tokenizer import Token, Tokenizer
 from openpyxl.formula.translate import Translator
 from openpyxl.utils.cell import coordinate_to_tuple, get_column_letter
 
@@ -91,6 +93,46 @@ def _runs_in_line(ws, across: bool, line: int) -> list[Run]:
     return runs
 
 
+def _index_of(coord: str, across: bool) -> int:
+    """Where a cell sits along its own line: the column when the run goes across, else the row."""
+    row, col = coordinate_to_tuple(coord)
+    return col if across else row
+
+
+def _align_to_siblings(book, runs: list[Run]) -> list[Run]:
+    """Stretch each run to the extent its neighbours use, picking up numbers at the ends.
+
+    A run starts and ends at a formula, so a number pasted over the first or last period of a row
+    falls outside it and is never seen. The other columns of the same table still run the full
+    length, so their shared extent says where this one should start and stop. Only numeric cells
+    are taken in, which keeps the year-zero column and the headers out.
+    """
+    grouped: dict[tuple[str, bool], list[Run]] = defaultdict(list)
+    for run in runs:
+        grouped[(run.sheet, run.across)].append(run)
+
+    aligned: list[Run] = []
+    for (sheet, across), group in grouped.items():
+        ws = book[sheet]
+        spans = Counter((_index_of(r.cells[0], across), _index_of(r.cells[-1], across)) for r in group)
+        (first, last), count = spans.most_common(1)[0]
+        for run in group:
+            start, end = _index_of(run.cells[0], across), _index_of(run.cells[-1], across)
+            if count < 2 or start < first or end > last or (start, end) == (first, last):
+                aligned.append(run)
+                continue
+            line = run.line
+            cells = []
+            for i in range(first, last + 1):
+                cell = ws.cell(row=line, column=i) if across else ws.cell(row=i, column=line)
+                inside = start <= i <= end
+                numeric = isinstance(cell.value, (int, float)) and not isinstance(cell.value, bool)
+                if inside or numeric:
+                    cells.append(cell.coordinate)
+            aligned.append(Run(run.sheet, across, run.line, run.origin, run.formula, tuple(cells)))
+    return aligned
+
+
 def formula_runs(path: str) -> list[Run]:
     """Every filled-across row and filled-down column in the workbook."""
     book = load_workbook(path, data_only=False)
@@ -100,7 +142,7 @@ def formula_runs(path: str) -> list[Run]:
             runs.extend(_runs_in_line(ws, True, row))
         for col in range(1, ws.max_column + 1):
             runs.extend(_runs_in_line(ws, False, col))
-    return runs
+    return _align_to_siblings(book, runs)
 
 
 def typed_over(path: str, runs: list[Run]) -> list[tuple[Run, str]]:
@@ -138,52 +180,105 @@ def _signed_pair(formula: str, sheet: str, names: dict[str, str], value_of, exte
 
 @dataclass(frozen=True)
 class Margin:
-    """A cell that adds one positive series to one negative series."""
+    """A series that combines revenue with a cost, and the operator that joins them."""
 
-    at: str  # the cell holding the sum
+    at: str  # the cell holding the combination
     position: tuple[int, int, int]  # sheet order, row, column, so margins can be read top down
-    positive: str
-    negative: str
+    revenue: str  # the side that depends on the tariff
+    cost: str  # the side that does not
+    operator: str  # "+" when costs are stored negative, "-" when they are stored positive
 
 
-def _margins(book, runs: list[Run], value_of) -> list[Margin]:
+def reads_graph(book, runs: list[Run]) -> dict[str, set[str]]:
+    """Which cells each formula cell reads, over the whole workbook."""
     names = {name.upper(): dn.attr_text for name, dn in book.defined_names.items()}
-    order = {name: i for i, name in enumerate(book.sheetnames)}
     extents = sheet_extents(book)
-    found: list[Margin] = []
+    graph: dict[str, set[str]] = {}
+    for ws in book.worksheets:
+        for row in ws.iter_rows():
+            for cell in row:
+                if not _is_formula(cell.value):
+                    continue
+                ref = f"{ws.title}!{cell.coordinate}"
+                graph[ref] = {f"{s}!{c}" for s, c in formula_refs(cell.value, ws.title, names, extents)}
+    return graph
+
+
+def depends_on(graph: dict[str, set[str]], source: str) -> set[str]:
+    """Every cell that reads `source`, directly or through any chain of formulas."""
+    readers: dict[str, set[str]] = {}
+    for ref, reads in graph.items():
+        for read in reads:
+            readers.setdefault(read, set()).add(ref)
+    seen, queue = {source}, [source]
+    while queue:
+        for nxt in readers.get(queue.pop(), ()):
+            if nxt not in seen:
+                seen.add(nxt)
+                queue.append(nxt)
+    return seen
+
+
+def two_term_sum(formula: str, sheet: str) -> tuple[str, str, str] | None:
+    """A formula that is exactly one cell plus or minus one other cell: (left, operator, right).
+
+    A margin adds or subtracts. Revenue multiplies generation by a tariff, so insisting on a
+    two-term sum keeps revenue itself from being mistaken for the margin.
+    """
+    try:
+        tokens = [t for t in Tokenizer(formula).items if t.type != Token.WSPACE]
+    except Exception:
+        return None
+    if len(tokens) != 3:
+        return None
+    left, middle, right = tokens
+    if middle.type != Token.OP_IN or middle.value not in ("+", "-"):
+        return None
+    if any(t.type != Token.OPERAND or t.subtype != Token.RANGE or ":" in t.value for t in (left, right)):
+        return None
+    qualify = lambda v: v if "!" in v else f"{sheet}!{v}"  # noqa: E731
+    return qualify(left.value.replace("$", "")), middle.value, qualify(right.value.replace("$", ""))
+
+
+def operating_cost(path: str, runs: list[Run], tariff_ref: str) -> tuple[Run, str] | None:
+    """The cost run an unwired operating cost belongs in, and the operator that charges it.
+
+    Anchored on the tariff, because that is the one cell we can always identify. Revenue is what
+    depends on the tariff; the operating margin is the first series that adds or subtracts a
+    revenue series and a series that does not depend on the tariff. Tax, PAT and cash flow all
+    depend on the tariff on both sides, so they do not qualify, and the operator tells us whether
+    this model stores its costs as negative numbers or positive ones.
+    """
+    book = load_workbook(path, data_only=False)
+    graph = reads_graph(book, runs)
+    tariff_driven = depends_on(graph, tariff_ref)
+    order = {name: i for i, name in enumerate(book.sheetnames)}
+    by_ref = {ref: run for run in runs for ref in run.refs}
+
+    margins: list[Margin] = []
     for run in runs:
         ws = book[run.sheet]
         for coord in run.cells:
             value = ws[coord].value
             if not _is_formula(value):
                 continue
-            pair = _signed_pair(value, run.sheet, names, value_of, extents)
-            if pair is None:
+            parts = two_term_sum(value, run.sheet)
+            if parts is None:
+                continue
+            left, operator, right = parts
+            sides = [side for side in (left, right) if side in tariff_driven]
+            if len(sides) != 1:
+                continue
+            cost = right if left in tariff_driven else left
+            if cost in tariff_driven or cost not in by_ref:
                 continue
             row, col = coordinate_to_tuple(coord)
-            found.append(Margin(f"{run.sheet}!{coord}", (order[run.sheet], row, col), pair[0], pair[1]))
-    return found
+            margins.append(Margin(f"{run.sheet}!{coord}", (order[run.sheet], row, col), sides[0], cost, operator))
 
-
-def cost_series(path: str, runs: list[Run], value_of) -> Run | None:
-    """The operating cost run: the row an unwired operating cost belongs in.
-
-    A cash flow statement is full of cells that add a positive series to a negative one. On the
-    sample, EBITDA, PAT, CFADS and project cash flow all qualify, and three of the four point at
-    tax rather than at O&M. The one we want is the first margin: the earliest place in the model
-    where revenue meets a cost, where the positive side is not itself already a margin.
-
-    Finding it this way lets an unwired cost be charged in the right row on a workbook we have
-    never seen, without knowing that the row happens to be called O&M.
-    """
-    book = load_workbook(path, data_only=False)
-    by_ref = {ref: run for run in runs for ref in run.refs}
-    margins = _margins(book, runs, value_of)
-    derived = {margin.at for margin in margins}
-    operating = [margin for margin in margins if margin.positive not in derived]
-    if not operating:
+    if not margins:
         return None
-    return by_ref.get(min(operating, key=lambda margin: margin.position).negative)
+    first = min(margins, key=lambda margin: margin.position)
+    return by_ref[first.cost], first.operator
 
 
 def next_along(sheet: str, coord: str, across: bool) -> str:

@@ -107,6 +107,33 @@ def idc_workbook(tmp_path_factory):
 
 
 @pytest.fixture(scope="session")
+def offset_workbook(tmp_path_factory):
+    """A model with one cell using a function the library does not implement."""
+    from evals.fixtures.make_workbooks import make_unsupported_function
+
+    path = tmp_path_factory.mktemp("unseen") / "offset.xlsx"
+    return path, make_unsupported_function(str(path))
+
+
+@pytest.fixture(scope="session")
+def positive_costs_workbook(tmp_path_factory):
+    """The other sign convention: costs positive, EBITDA = revenue - O&M."""
+    from evals.fixtures.make_workbooks import make_wind_positive_costs
+
+    path = tmp_path_factory.mktemp("unseen") / "wind_positive_costs.xlsx"
+    return path, make_wind_positive_costs(str(path))
+
+
+@pytest.fixture(scope="session")
+def edge_typed_over_workbook(tmp_path_factory):
+    """Numbers pasted over the cost row at its first, middle and last year."""
+    from evals.fixtures.make_workbooks import make_wind_typed_over_edges
+
+    path = tmp_path_factory.mktemp("unseen") / "wind_typed_edges.xlsx"
+    return path, make_wind_typed_over_edges(str(path))
+
+
+@pytest.fixture(scope="session")
 def api_url() -> str:
     url = os.environ.get("API_URL")
     if not url:

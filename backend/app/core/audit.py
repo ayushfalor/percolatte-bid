@@ -27,6 +27,8 @@ CHECKS = (
     checks.stale_note_findings,
     checks.whole_number_percent_findings,
     checks.legacy_sheet_findings,
+    checks.unsupported_function_findings,
+    checks.circular_reference_findings,
 )
 
 
@@ -48,7 +50,12 @@ def _model(path: str, target_irr: float) -> checks.Model:
     engine = engine_for(path)
     base = breakeven_with_fixes(path, [], target_irr=target_irr)
 
+    untrusted = {cell for cells in engine.unsupported.values() for cell in cells}
+
     def price(fix: Fix) -> float | None:
+        # A fix that lands on a cell we cannot evaluate has no honest price.
+        if untrusted & set(fix.touches):
+            return None
         try:
             return breakeven_with_fixes(path, [fix], target_irr=target_irr) - base
         except (AuditError, EngineError, ValueError):
@@ -62,6 +69,9 @@ def _model(path: str, target_irr: float) -> checks.Model:
         value_of=engine.current_value,
         price=price,
         breakeven=base,
+        tariff=engine.normalize_ref(_seek_cells(path, engine)[0]),
+        unsupported=engine.unsupported,
+        cycle_report=engine.cycle_report,
     )
 
 

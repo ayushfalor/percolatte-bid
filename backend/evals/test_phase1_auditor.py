@@ -353,3 +353,60 @@ def test_goal_seek_works_through_a_circular_reference(idc_workbook):
     path, truth = idc_workbook
     got = breakeven_with_fixes(str(path), [], target_irr=truth["target_irr"])
     assert got == pytest.approx(truth["breakeven"], abs=1e-3)
+
+
+def test_unsupported_function_is_named_not_guessed(offset_workbook):
+    """OFFSET is not implemented. Carry on with the rest, and say which cell cannot be trusted."""
+    from app.core.audit import audit_workbook
+    from app.core.patching import engine_for
+
+    path, truth = offset_workbook
+    engine = engine_for(str(path))
+    assert truth["unsupported"] in engine.functions_used
+    assert engine.unsupported.get(truth["unsupported"]) == [truth["offset_cell"]], engine.unsupported
+
+    findings = audit_workbook(str(path), target_irr=truth["target_irr"])
+    reported = [f for f in findings if f.id == "unsupported_function"]
+    assert reported, [f.id for f in findings]
+    assert truth["offset_cell"] in reported[0].evidence
+    assert truth["unsupported"] in reported[0].title
+
+
+def test_unsupported_function_does_not_stop_the_rest(offset_workbook):
+    """The broken cell is nowhere near the IRR, so the model still prices."""
+    from app.core.audit import breakeven_with_fixes
+
+    path, truth = offset_workbook
+    got = breakeven_with_fixes(str(path), [], target_irr=truth["target_irr"])
+    assert got == pytest.approx(truth["breakeven"], abs=1e-4)
+
+
+def test_insurance_wires_on_either_sign_convention(positive_costs_workbook):
+    """Costs positive, EBITDA = revenue - O&M. The fix must add cost, not take it away."""
+    from app.core.audit import audit_workbook, breakeven_with_fixes
+
+    path, truth = positive_costs_workbook
+    findings = audit_workbook(str(path), target_irr=truth["target_irr"])
+    orphan = [f for f in findings if f.id == "orphan_input" and f.where == truth["orphan_input_cell"]]
+    assert orphan, [(f.id, f.where) for f in findings]
+    fix = orphan[0].fix
+    assert fix, "the insurance fix should be found on this layout too"
+    assert set(fix.touches) == set(truth["om_row_cells"]), fix.touches
+
+    got = breakeven_with_fixes(str(path), [fix], target_irr=truth["target_irr"])
+    assert got - truth["breakeven"] == pytest.approx(truth["impact_insurance"], abs=1e-3)
+    assert orphan[0].impact_inr_per_kwh == pytest.approx(truth["impact_insurance"], abs=1e-3)
+
+
+def test_typed_over_values_at_both_ends_of_a_row(edge_typed_over_workbook):
+    """Three pasted numbers, one of them at the very start of the row and one at the very end."""
+    from app.core.audit import audit_workbook, breakeven_with_fixes
+
+    path, truth = edge_typed_over_workbook
+    findings = audit_workbook(str(path), target_irr=truth["target_irr"])
+    found = sorted(f.where for f in findings if f.id == "hardcode_in_formula_row")
+    assert found == sorted(truth["typed_over_cells"]), found
+
+    fixes = [f.fix for f in findings if f.id == "hardcode_in_formula_row" and f.fix]
+    got = breakeven_with_fixes(str(path), fixes, target_irr=truth["target_irr"])
+    assert got - truth["breakeven"] == pytest.approx(truth["impact_all_fixed"], abs=1e-3)

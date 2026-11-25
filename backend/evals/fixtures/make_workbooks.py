@@ -534,3 +534,151 @@ def make_idc_loop(path: str) -> dict:
         "equity_irr": idc_equity_irr(p),
         "breakeven": idc_breakeven(0.12, p),
     }
+
+
+def make_unsupported_function(path: str) -> dict:
+    """A model with one cell our formula library cannot evaluate.
+
+    OFFSET is not in the library's registry, so the cell comes back as #NAME?. The rest of the
+    model is fine, so the right behaviour is to carry on, name the function and the cell, and
+    refuse to price anything whose answer would depend on it.
+    """
+    p = WIND
+    wb = Workbook()
+    _wind_body(wb, p, p["cuf"])
+    summary = wb["Summary"]
+    summary.append(["Year-10 revenue (OFFSET)", "=OFFSET(Annual!C2,10,0)"])
+    wb.save(path)
+    return {
+        "equity_irr_cell": "Summary!B2",
+        "tariff_cell": "Assumptions!B5",
+        "offset_cell": "Summary!B5",
+        "unsupported": "OFFSET",
+        "target_irr": 0.12,
+        "equity_irr": wind_equity_irr(p),
+        "breakeven": wind_breakeven(0.12, p),
+    }
+
+
+def make_wind_positive_costs(path: str) -> dict:
+    """The same wind model with the other sign convention: costs are positive.
+
+    EBITDA = revenue - O&M instead of revenue + O&M. A rule that looks for a positive series
+    added to a negative one finds nothing here, and an insurance fix that subtracts would add
+    cost where it should take it away.
+    """
+    p = WIND
+    wb = Workbook()
+    a = wb.active
+    a.title = "Assumptions"
+    a["A1"] = "WIND PROJECT ASSUMPTIONS"
+    a.append(["Item", "Value", "Unit"])
+    for row in [
+        ("Capacity", p["capacity_mw"], "MW"),
+        ("CUF", p["cuf"], "fraction"),
+        ("Tariff", p["tariff"], "INR/kWh"),
+        ("Capex", p["capex_cr_per_mw"], "INR Cr/MW"),
+        ("O&M", p["om_lakh_per_mw"], "INR lakh/MW/yr"),
+        ("O&M escalation", p["om_escalation"], "fraction"),
+        ("Debt share", p["debt_share"], "fraction"),
+        ("Interest", p["interest"], "fraction"),
+        ("Loan tenor", p["tenor"], "yrs"),
+        ("Tax rate", p["tax"], "fraction"),
+        ("Depreciation life", p["dep_life"], "yrs"),
+        ("Availability loss", p["availability_loss"], "fraction"),
+    ]:
+        a.append(list(row))  # rows 3..14
+    a.append(["Insurance", INSURANCE_RATE, "% of capex p.a."])  # row 15, referenced by nothing
+
+    s = wb.create_sheet("Annual")
+    s.append(
+        [
+            "Year",
+            "Generation (MU)",
+            "Revenue",
+            "O&M",
+            "EBITDA",
+            "Opening debt",
+            "Interest",
+            "Principal",
+            "Closing debt",
+            "Depreciation",
+            "PBT",
+            "Tax",
+            "",
+            "Equity CF",
+        ]
+    )
+    A = "Assumptions!"
+    s.append([0, 0, 0, 0, 0, 0, 0, 0, f"={A}$B$3*{A}$B$6*{A}$B$9", 0, 0, 0, None, f"=-({A}$B$3*{A}$B$6*(1-{A}$B$9))"])
+    for r in range(3, 3 + p["years"]):
+        s.append(
+            [
+                f"=A{r - 1}+1",
+                f"={A}$B$3*{A}$B$4*8766/1000*(1-{A}$B$14)",
+                f"=B{r}*{A}$B$5/10",
+                f"={A}$B$3*{A}$B$7*(1+{A}$B$8)^(A{r}-1)/100",  # positive cost
+                f"=C{r}-D{r}",  # revenue minus cost
+                f"=I{r - 1}",
+                f"={A}$B$3*{A}$B$6/{A}$B$13",  # positive depreciation
+                f"=IF(A{r}<={A}$B$11,$I$2/{A}$B$11,0)",  # positive principal
+                f"=F{r}-H{r}",
+                f"=F{r}*{A}$B$10",  # positive interest
+                f"=E{r}-G{r}-J{r}",  # PBT = EBITDA - interest - depreciation
+                f"=MAX(0,K{r}*{A}$B$12)",  # positive tax
+                None,
+                f"=E{r}-J{r}-H{r}-L{r}",  # equity CF = EBITDA - interest - principal - tax
+            ]
+        )
+    last = 2 + p["years"]
+    m = wb.create_sheet("Summary")
+    m.append(["Metric", "Value"])
+    m.append(["Equity IRR", f"=IRR(Annual!N2:N{last})"])
+    m.append(["Total capex (INR Cr)", f"={A}B3*{A}B6"])
+    wb.save(path)
+
+    as_is = wind_breakeven(0.12, p)
+    with_insurance = wind_breakeven(0.12, p, insurance=True)
+    return {
+        "equity_irr_cell": "Summary!B2",
+        "tariff_cell": "Assumptions!B5",
+        "total_capex_cell": "Summary!B3",
+        "orphan_input_cell": "Assumptions!B15",
+        "om_row_cells": [f"Annual!D{r}" for r in range(3, 3 + p["years"])],
+        "target_irr": 0.12,
+        "equity_irr": wind_equity_irr(p),
+        "breakeven": as_is,
+        "breakeven_insurance_wired": with_insurance,
+        "impact_insurance": with_insurance - as_is,
+    }
+
+
+EDGE_TYPED_OVER = {1: -11.0, 13: -19.0, 25: -27.0}  # first year, a middle year, and the last year
+
+
+def make_wind_typed_over_edges(path: str) -> dict:
+    """Numbers pasted over the O&M formula at the first year, a middle year and the last year.
+
+    A run detector that needs a formula on both sides of the gap, or that stops at the first
+    number it meets, misses the ends of the row and finds only one of the three.
+    """
+    p = WIND
+    wb = Workbook()
+    _wind_body(wb, p, p["cuf"])
+    annual = wb["Annual"]
+    for year, value in EDGE_TYPED_OVER.items():
+        annual[f"D{year + 2}"] = value  # row 3 is year 1
+
+    wb.save(path)
+    as_is = wind_breakeven(0.12, p, om_typed_over=EDGE_TYPED_OVER)
+    fixed = wind_breakeven(0.12, p)
+    return {
+        "equity_irr_cell": "Summary!B2",
+        "tariff_cell": "Assumptions!B5",
+        "typed_over_cells": [f"Annual!D{year + 2}" for year in sorted(EDGE_TYPED_OVER)],
+        "target_irr": 0.12,
+        "equity_irr": wind_equity_irr(p, om_typed_over=EDGE_TYPED_OVER),
+        "breakeven": as_is,
+        "breakeven_all_fixed": fixed,
+        "impact_all_fixed": fixed - as_is,
+    }
