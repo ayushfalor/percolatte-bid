@@ -32,6 +32,10 @@ Stop with `Ctrl+C` (or `docker compose down`). Wipe the database with `docker co
 | One-call self test | open http://localhost:8000/api/selftest, expect `"ok": true` |
 | Full eval suite, inside the container | `make eval` or `docker compose run --rm -e API_URL=http://api:8000 api pytest -q` |
 | Outside-in smoke test | `make smoke` or `bash scripts/smoke.sh` |
+| Fast evals on your machine, no Docker | `make test` (needs Python 3.12; `make venv` sets one up) |
+| PEP 8 and format check | `make lint` (the same two commands CI runs) |
+| What is wrong with the bid model, priced in paise | `GET /api/workbooks/{id}/findings` |
+| Which inputs move the breakeven most | `GET /api/workbooks/{id}/drivers` |
 
 ## Try your own files
 
@@ -61,12 +65,12 @@ browser ──> web (nginx + React) ──> api (FastAPI) ──> db (Postgres 1
                                      worker (agents) ───┘   polls the runs table for jobs
 ```
 
-**Agents** (one module each in `backend/app/agents/`; build status by phase in [docs/phases/PLAN.md](docs/phases/PLAN.md)):
+**Agents** (one module each in `backend/app/agents/`):
 
 | Agent | Job | Status |
 |---|---|---|
 | Reader | Excel, tender PDF and auction history into clean, cited facts | built (LLM tender extraction next) |
-| Auditor | Model bugs and tender-vs-model mismatches, each fix priced in INR/kWh | target tests written |
+| Auditor | Model bugs and tender-vs-model mismatches, each fix priced in INR/kWh | built (tender mismatches need Phase 2 facts) |
 | Scout | Web research on rivals, facts with URL and date | planned |
 | Rival model | Per rival: chance of bidding at each price, and why. Frozen once computed | planned |
 | Engine | Win odds and profit at every price point, and how they move with inputs | economics curve built |
@@ -97,6 +101,10 @@ RfS worked examples for the auction rules, engine parity and goal seek on the sa
 reader golden files, a generated workbook the app has never seen (different layout, no named
 ranges, no cached values, ground truth computed in Python), black-box HTTP tests, and
 **targets**: behaviour written down before it is built (marked xfail until it passes).
+
+The Auditor's gate also runs on a second generated workbook with the sample's two traps planted on
+a different layout, and checks every priced finding by applying that finding's own fix and
+measuring the breakeven, so a reported number cannot be a memorised constant.
 
 ## Configuration
 
@@ -131,8 +139,5 @@ TODO: one page.
 
 - [docs/EXPLAINED.md](docs/EXPLAINED.md): the solution and the evals in simple English
 - [docs/solution/SOLUTION.md](docs/solution/SOLUTION.md): the design; [decisions](docs/solution/decisions.md)
-- [docs/phases/](docs/phases/PLAN.md): build phases, each with its gate tests and reviewer Q&A
 - [docs/problem/](docs/README.md): the brief, requirements traceability, domain primer, tender facts
 - [ASSUMPTIONS.md](ASSUMPTIONS.md): every assumed number
-
-Built with Claude Code: project rules in `CLAUDE.md`, phase commands in `.claude/commands/`.

@@ -1,15 +1,15 @@
 # Requirements and where each one is met
 
-Two sources: the written brief (`01-assignment-brief.md`) and the founder call. Status is updated
+Two sources: the written brief and the founder call. Status is updated
 at the end of every phase.
 
 | # | Requirement | Source | Met in | Status |
 |---|---|---|---|---|
-| R1 | Read any workbook without assuming a template (sheets, formulas, names, merged headers, units) | Brief 1 | Phase 0 Reader, Phase 1 labels | Partly done |
-| R2 | Will be run on a workbook we have not seen | Brief 1 | Unseen-workbook evals, every phase | Started |
-| R3 | Show what drives what, which assumptions matter, what looks wrong | Brief 2 | Phase 1 Auditor + tornado | Planned |
-| R4 | Run scenarios, find a breakeven, explain a number; chat is not the main output | Brief 2 | Phase 0 engine, Phase 1, Phase 5 | Partly done |
-| R5 | Speed and correct numbers | Brief 2 | Parity check, speed budgets in evals | Started |
+| R1 | Read any workbook without assuming a template (sheets, formulas, names, merged headers, units) | Brief 1 | Phase 0 Reader, Phase 1 labels and model map | Done for the checks we run |
+| R2 | Will be run on a workbook we have not seen | Brief 1 | Unseen-workbook evals, every phase | On track (Auditor proven on a second generated model) |
+| R3 | Show what drives what, which assumptions matter, what looks wrong | Brief 2 | Phase 1 Auditor + tornado | Done (no UI until Phase 5) |
+| R4 | Run scenarios, find a breakeven, explain a number; chat is not the main output | Brief 2 | Phase 0 engine, Phase 1 fixes as scenarios, Phase 5 | Partly done |
+| R5 | Speed and correct numbers | Brief 2 | Parity check, speed budgets in evals | On track (tornado budget enforced at 30s) |
 | R6 | Extract capacity limits, eligibility, auction rules, timelines, penalties, guarantees from the RfS | Brief 3 | Phase 2 | Planned |
 | R7 | Combine tender + history + model, simulate the auction, recommend a bid range, show win chance vs return | Brief 3 | Phases 3 and 4 | Planned |
 | R8 | Intuitive UI for a non-technical bid manager who must trust it | Brief 4 | Phase 5 | Planned |

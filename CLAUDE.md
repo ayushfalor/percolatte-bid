@@ -9,7 +9,8 @@ simulation, and a UI a non-technical bid manager can trust. They will run their 
 
 ## Read first
 - `docs/solution/SOLUTION.md`: the design. Change it before changing the design in code.
-- `docs/phases/PLAN.md` and `docs/phases/status.json`: which phase we are in and the loop.
+- `docs/phases/status.json`: which phase we are in. `PLAN.md` and `phase-N.md` are local only
+  (git-ignored), along with `.claude/commands/`.
 - `docs/problem/03-domain-primer.md`: domain words and RfS rules. Never invent tender facts.
 - `ASSUMPTIONS.md`: every assumed number. Add a row when you assume something new.
 

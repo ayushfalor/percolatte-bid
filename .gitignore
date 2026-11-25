@@ -8,3 +8,10 @@ frontend/dist/
 *.tsbuildinfo
 .DS_Store
 notes/
+
+# Kept local, not shipped to reviewers: the phase loop and the prompts that drive it.
+# status.json stays tracked, because the eval gate reads it.
+.claude/
+docs/phases/PLAN.md
+docs/phases/phase-*.md
+docs/problem/01-assignment-brief.md

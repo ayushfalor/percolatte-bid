@@ -25,4 +25,7 @@ here. Source types: **Tender** (RfS clause), **Model** (bid_model.xlsx), **Histo
 | A-17 | Price ladder covers INR 2.00 to 2.80, every paisa | n/a | Assumed (D-007) | Engine | `core/simulate.py` defaults |
 | A-18 | Entry bid must keep the chance of being knocked out as H1 at or below 5% | 5% | Assumed | Engine | `recommend(max_h1_risk=...)` |
 | A-19 | Real company names on rivals are illustrative labels, not real bid data | n/a | Assumed | Rival model, UI | anonymize toggle |
+| A-20 | The tornado moves each input by 10% of its own value, either way | ±10% | Assumed | Auditor (tornado) | `core/audit.py` SWING |
+| A-21 | A tender mismatch is "high" when it is worth at least 1 paisa, otherwise "medium" | INR 0.01/kWh | Assumed | Auditor (severity) | `core/checks.py` BIG_IMPACT |
+| A-22 | A note is stale when the number it records is within 20% of the live breakeven but more than half a paisa off it | 20% band, 0.005 tolerance | Assumed | Auditor (stale notes) | `core/checks.py` STALE_BAND, STALE_TOLERANCE |
 
