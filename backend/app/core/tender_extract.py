@@ -1,4 +1,5 @@
 """Phase 2: tender facts with proof. Contract only; see evals/test_phase2_tender.py."""
+
 from __future__ import annotations
 
 from .contracts import TenderFact

@@ -3,13 +3,14 @@
 Queue = the runs table. `FOR UPDATE SKIP LOCKED` lets you run several workers
 safely (docker compose up --scale worker=3). No Redis needed.
 """
+
 from __future__ import annotations
 
 import logging
 import signal
 import time
 import traceback
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from sqlalchemy import text, update
 
@@ -65,10 +66,14 @@ def execute(run_id) -> str:
         log.exception("Run %s (%s) failed", run_id, run.kind)
     with engine.begin() as conn:
         conn.execute(
-            update(Run).where(Run.id == run_id, Run.status == "running").values(
-                status=status, result=result, error=error,
+            update(Run)
+            .where(Run.id == run_id, Run.status == "running")
+            .values(
+                status=status,
+                result=result,
+                error=error,
                 progress=1.0 if status == "succeeded" else Run.progress,
-                finished_at=datetime.now(timezone.utc),
+                finished_at=datetime.now(UTC),
             )
         )
     return status
@@ -77,10 +82,12 @@ def execute(run_id) -> str:
 def recover_stale() -> None:
     """A worker that died mid-run leaves rows in 'running'. Fail them loudly instead of hanging."""
     with engine.begin() as conn:
-        conn.execute(text(
-            "UPDATE runs SET status='failed', error='Worker restarted while this run was in progress', "
-            "finished_at=now() WHERE status='running' AND started_at < now() - interval '15 minutes'"
-        ))
+        conn.execute(
+            text(
+                "UPDATE runs SET status='failed', error='Worker restarted while this run was in progress', "
+                "finished_at=now() WHERE status='running' AND started_at < now() - interval '15 minutes'"
+            )
+        )
 
 
 def main() -> None:

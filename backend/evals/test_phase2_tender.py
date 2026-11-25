@@ -1,4 +1,5 @@
 """Phase 2 gate: tender facts with proof, offline-safe."""
+
 from __future__ import annotations
 
 import json

@@ -1,4 +1,5 @@
 """FastAPI app. Interactive API docs at /docs."""
+
 from __future__ import annotations
 
 import logging

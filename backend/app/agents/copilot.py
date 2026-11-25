@@ -3,6 +3,7 @@
 What-ifs become Scenario rows (visible in the UI), then the Engine reruns.
 It can read the rival snapshot but never change it.
 """
+
 from __future__ import annotations
 
 from typing import Any

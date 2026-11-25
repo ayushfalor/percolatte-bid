@@ -1,4 +1,5 @@
 """Phase 5: the Copilot may only state numbers that came from a tool. Contract only."""
+
 from __future__ import annotations
 
 from typing import Any

@@ -1,4 +1,5 @@
 """Phase 1: the Auditor's deterministic core. Contract only; see evals/test_phase1_auditor.py."""
+
 from __future__ import annotations
 
 from typing import Any

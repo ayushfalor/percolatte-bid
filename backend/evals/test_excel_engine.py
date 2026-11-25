@@ -1,4 +1,5 @@
 """Correctness and speed of the formula engine on the provided bid model."""
+
 from __future__ import annotations
 
 import time

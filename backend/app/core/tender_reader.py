@@ -4,6 +4,7 @@ Every later step (LLM extraction, quote verification, citations) works on
 these pages. We keep both numbering schemes: the PDF page index and the
 printed label ("Page 12 of 127"), because bid teams quote the printed one.
 """
+
 from __future__ import annotations
 
 import re
@@ -26,14 +27,16 @@ def read_pages(path: str) -> dict[str, Any]:
             textpage.close()
             m = PRINTED.search(text)
             sections = [s.strip()[:80] for s in SECTION.findall(text)]
-            pages.append({
-                "pdf_page": i + 1,
-                "printed_page": int(m.group(1)) if m else None,
-                "chars": len(text),
-                "needs_ocr": len(text.strip()) < OCR_THRESHOLD,
-                "sections": sections,
-                "text": text,
-            })
+            pages.append(
+                {
+                    "pdf_page": i + 1,
+                    "printed_page": int(m.group(1)) if m else None,
+                    "chars": len(text),
+                    "needs_ocr": len(text.strip()) < OCR_THRESHOLD,
+                    "sections": sections,
+                    "text": text,
+                }
+            )
     finally:
         pdf.close()
     return {

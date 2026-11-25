@@ -1,4 +1,5 @@
 """File helpers: detect what a file is, and give agents a path on local disk."""
+
 from __future__ import annotations
 
 import hashlib

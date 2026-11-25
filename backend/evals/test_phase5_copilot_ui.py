@@ -1,4 +1,5 @@
 """Phase 5 gate: the Copilot never invents numbers; what-ifs become visible scenarios."""
+
 from __future__ import annotations
 
 import httpx

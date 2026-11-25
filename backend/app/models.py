@@ -7,6 +7,7 @@ runs       every agent execution: it is the job queue, the progress feed and the
            rival snapshot "frozen once computed"
 scenarios  named what-ifs (input overrides) created from the UI or the chat
 """
+
 from __future__ import annotations
 
 import uuid
@@ -38,7 +39,8 @@ class Run(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     kind: Mapped[str] = mapped_column(String(32), index=True)  # reader | auditor | scout | rival | engine | copilot
-    status: Mapped[str] = mapped_column(String(16), default="queued", index=True)  # queued | running | succeeded | failed
+    # queued | running | succeeded | failed
+    status: Mapped[str] = mapped_column(String(16), default="queued", index=True)
     document_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("documents.id", ondelete="CASCADE"), nullable=True, index=True
     )

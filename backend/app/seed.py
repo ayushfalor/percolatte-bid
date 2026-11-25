@@ -1,4 +1,5 @@
 """Load the three sample files on first start, so reviewers land on a ready workspace."""
+
 from __future__ import annotations
 
 import logging

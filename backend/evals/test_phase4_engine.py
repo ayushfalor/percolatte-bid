@@ -1,7 +1,9 @@
 """Phase 4 gate: the price ladder is consistent with the RfS and with common sense."""
+
 from __future__ import annotations
 
 import time
+from itertools import pairwise
 
 import pytest
 
@@ -35,7 +37,7 @@ def ladder(snapshot, economics):
 
 def test_win_odds_fall_as_price_rises(ladder):
     odds = [p.p_win_any for p in ladder]
-    assert all(a >= b - 1e-12 for a, b in zip(odds, odds[1:]))
+    assert all(a >= b - 1e-12 for a, b in pairwise(odds))
 
 
 def test_extremes_make_sense(ladder):

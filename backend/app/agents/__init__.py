@@ -4,15 +4,18 @@ Agents never write to the database themselves; the worker stores whatever
 they return as the run's result. That keeps every agent easy to test
 (call it with a fake context) and keeps finished runs immutable.
 """
+
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, Callable
+from typing import Any
 
 from sqlalchemy import select, update
 
 from ..config import Settings, get_settings
-from ..db import SessionLocal, engine as db_engine
+from ..db import SessionLocal
+from ..db import engine as db_engine
 from ..files import materialize
 from ..models import Document, Run
 
@@ -32,7 +35,9 @@ class AgentContext:
     def progress(self, fraction: float, message: str | None = None) -> None:
         """Visible live in the UI while the run is still going (separate short transaction)."""
         with db_engine.begin() as conn:
-            conn.execute(update(Run).where(Run.id == self.run_id).values(progress=max(0.0, min(1.0, fraction)), message=message))
+            conn.execute(
+                update(Run).where(Run.id == self.run_id).values(progress=max(0.0, min(1.0, fraction)), message=message)
+            )
 
     def document(self) -> tuple[Document, str]:
         """The run's document plus a local file path for it."""
@@ -75,6 +80,7 @@ def agent(kind: str, title: str, job: str, built: bool = True) -> Callable[[Agen
     def wrap(fn: AgentFn) -> AgentFn:
         REGISTRY[kind] = AgentSpec(kind, title, job, built, fn)
         return fn
+
     return wrap
 
 
@@ -82,5 +88,5 @@ def make_context(run: Run) -> AgentContext:
     return AgentContext(run.id, run.kind, run.params or {}, run.document_id, get_settings())
 
 
-# Import order = pipeline order. Importing registers each agent.
-from . import reader, auditor, scout, rival, modeling, copilot  # noqa: E402,F401
+# Import order = pipeline order, and REGISTRY keeps it, so do not let isort sort this line.
+from . import reader, auditor, scout, rival, modeling, copilot  # noqa: E402,F401,I001

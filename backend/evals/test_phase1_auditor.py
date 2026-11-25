@@ -1,4 +1,5 @@
 """Phase 1 gate: the Auditor understands the model and prices what is wrong."""
+
 from __future__ import annotations
 
 import hashlib
@@ -32,6 +33,7 @@ def _one(findings, key: str):
 
 
 # ---------- what it finds ----------
+
 
 @pytest.mark.parametrize("target", [pytest.param(t, id=f"{t['id']}:{t['where']}") for t in EXPECTED["auditor_targets"]])
 def test_auditor_finds(findings, target):
@@ -81,6 +83,7 @@ def test_truncated_range_names_both_ranges_and_both_irrs(findings):
 
 # ---------- what each finding is worth ----------
 
+
 @pytest.mark.parametrize("key", sorted(IMPACTS))
 def test_known_impacts(findings, key):
     got = _one(findings, key).impact_inr_per_kwh
@@ -121,6 +124,7 @@ def test_tender_mismatch_impact_cites_its_assumption_and_clauses(findings):
 
 # ---------- the corrected breakeven ----------
 
+
 def test_corrected_breakeven(samples):
     from app.core.audit import corrected_breakeven
 
@@ -152,6 +156,7 @@ def test_fixes_never_touch_the_file(samples):
 
 
 # ---------- labels and the tornado ----------
+
 
 def test_labels_come_from_column_headers_when_the_row_text_is_not_the_name(samples):
     """Scenarios!D5 sits in the 'Base' row under the 'CUF (AC)' header. The header names it."""
@@ -196,6 +201,7 @@ def test_tornado_is_fast_enough(samples):
 
 
 # ---------- a workbook the app has never seen ----------
+
 
 def test_auditor_on_an_unseen_workbook(bugged_workbook):
     """Different layout, different labels, no cached values, ground truth computed in Python.
@@ -255,6 +261,7 @@ def test_unseen_workbook_file_is_never_written(bugged_workbook):
 
 
 # ---------- over HTTP ----------
+
 
 @pytest.mark.stack
 def test_findings_endpoint(api_client):

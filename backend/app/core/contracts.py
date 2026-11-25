@@ -2,6 +2,7 @@
 
 If you change a field here, update the evals and docs/solution/SOLUTION.md in the same commit.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -30,6 +31,7 @@ class Fix:
     "{current}" against the result. The other order would drop the insurance just added to the
     year-6 cell when that cell's formula is restored.
     """
+
     overrides: dict[str, Any] = field(default_factory=dict)  # cell -> value
     formula_patches: dict[str, str] = field(default_factory=dict)  # cell -> template
     note: str = ""  # one line, why this is the right fix
@@ -43,6 +45,7 @@ class Fix:
 @dataclass(frozen=True)
 class Finding:
     """One thing the Auditor found (Phase 1)."""
+
     id: str  # e.g. "orphan_input", "truncated_range", "tender_mismatch"
     where: str  # a cell ("Inputs!C28") or a sheet name ("Inputs_old_v2")
     severity: Severity
@@ -57,6 +60,7 @@ class Finding:
 @dataclass(frozen=True)
 class TenderFact:
     """One fact pulled from the RfS (Phase 2). Every fact carries its proof."""
+
     field: str
     value: Any
     unit: str
@@ -71,6 +75,7 @@ class TenderFact:
 @dataclass(frozen=True)
 class RivalProfile:
     """What we believe about one rival (Phase 3). The 'why' is part of the output."""
+
     name: str  # display label; real names are illustrative, see ASSUMPTIONS.md
     archetype: Literal["leader", "mid_pack", "laggard", "wildcard"]
     p_participate: float
@@ -85,6 +90,7 @@ class RivalProfile:
 @dataclass(frozen=True)
 class RivalSnapshot:
     """Frozen once computed (Phase 3). New beliefs mean a new snapshot, never an edit."""
+
     id: str
     regime: Literal["history", "almm_40", "almm_100"]
     seed: int
@@ -96,6 +102,7 @@ class RivalSnapshot:
 @dataclass(frozen=True)
 class LadderPoint:
     """One row of the price ladder (Phase 4)."""
+
     tariff: float
     p_win_any: float
     p_win_full: float
@@ -110,6 +117,7 @@ class LadderPoint:
 @dataclass(frozen=True)
 class Recommendation:
     """The three numbers the bid manager acts on (Phase 4)."""
+
     entry_bid: float  # envelope-2 tariff
     target_low: float
     target_high: float

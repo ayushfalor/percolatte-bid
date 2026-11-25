@@ -4,6 +4,7 @@ LLM tender extraction plugs in here later (structured output with page + quote,
 verified with core.tender_reader.quote_on_page). In offline mode it loads the
 cached extraction for the bundled tender.
 """
+
 from __future__ import annotations
 
 from typing import Any

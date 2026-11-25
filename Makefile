@@ -3,7 +3,7 @@
 # Use the local virtualenv when it exists, otherwise whatever `python` is on PATH.
 PY := $(shell [ -x "$(CURDIR)/.venv/bin/python" ] && echo "$(CURDIR)/.venv/bin/python" || echo python)
 
-.PHONY: up down reset logs ps test eval smoke status lock venv
+.PHONY: up down reset logs ps test lint eval smoke status lock venv
 
 up:        ## build and start everything in the background
 	docker compose up --build -d
@@ -24,6 +24,10 @@ ps:        ## show which services are running and healthy
 
 test:      ## fast evals on your machine, no Docker (needs Python 3.12 + backend/requirements.lock)
 	cd backend && $(PY) -m pytest -q -m "not stack"
+
+lint:      ## PEP 8 check and format check on the backend (same two commands CI runs)
+	cd backend && $(PY) -m ruff check .
+	cd backend && $(PY) -m ruff format --check .
 
 status:    ## which phase are we in
 	@cat docs/phases/status.json

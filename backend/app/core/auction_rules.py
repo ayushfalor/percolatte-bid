@@ -8,6 +8,7 @@ Simplification (documented in ASSUMPTIONS.md): each bidder is one block of
 capacity. The RfS lets a bidder split capacity into several projects with a
 preference order; we round a partial award down to 10 MW instead.
 """
+
 from __future__ import annotations
 
 import math
@@ -88,11 +89,19 @@ def shortlist_for_era(bids: list[Bid], tendered_mw: float = 700) -> Shortlist:
     h1_bid = h1[0]
     remaining_mw = st - h1_bid.capacity_mw
     if ELIGIBLE_SHARE * remaining_mw <= tendered_mw:
-        return Shortlist(len(bids), st, se, ranks, [], everyone,
-                         "Eliminating H1 would drop 0.8 x capacity below tendered: no elimination (note b)")
+        return Shortlist(
+            len(bids),
+            st,
+            se,
+            ranks,
+            [],
+            everyone,
+            "Eliminating H1 would drop 0.8 x capacity below tendered: no elimination (note b)",
+        )
     if len(bids) - 1 < MIN_SHORTLIST:
-        return Shortlist(len(bids), st, se, ranks, [], everyone,
-                         "Fewer than 3 bidders would remain: no elimination (note b)")
+        return Shortlist(
+            len(bids), st, se, ranks, [], everyone, "Fewer than 3 bidders would remain: no elimination (note b)"
+        )
 
     kept = [name for name in everyone if name != h1_bid.bidder]
     return Shortlist(len(bids), st, se, ranks, [h1_bid.bidder], kept, "H1 bidder eliminated")
@@ -143,11 +152,14 @@ def allocate(bids: list[Bid], eligible_mw: float) -> Allocation:
         tariff = truncate_paise(b.tariff)
         remaining = eligible_mw - filled
         if tariff > ceiling + 1e-9:
-            out.awards.append(Award(b.bidder, tariff, b.capacity_mw, "red", 0.0, False,
-                                    f"Above L1 + 2% ({ceiling:.2f})"))
+            out.awards.append(
+                Award(b.bidder, tariff, b.capacity_mw, "red", 0.0, False, f"Above L1 + 2% ({ceiling:.2f})")
+            )
             continue
         if remaining <= 1e-9:
-            out.awards.append(Award(b.bidder, tariff, b.capacity_mw, "red", 0.0, False, "Eligible capacity already filled"))
+            out.awards.append(
+                Award(b.bidder, tariff, b.capacity_mw, "red", 0.0, False, "Eligible capacity already filled")
+            )
             continue
         if b.capacity_mw <= remaining + 1e-9:
             filled += b.capacity_mw
@@ -157,10 +169,21 @@ def allocate(bids: list[Bid], eligible_mw: float) -> Allocation:
         if partial >= MIN_PROJECT_MW:
             filled += partial
             refusable = partial < 0.5 * b.capacity_mw
-            out.awards.append(Award(b.bidder, tariff, b.capacity_mw, "orange", partial, refusable,
-                                    "Partial award" + (" (may refuse, below 50%)" if refusable else " (must accept, 50% or more)")))
+            why = " (may refuse, below 50%)" if refusable else " (must accept, 50% or more)"
+            out.awards.append(
+                Award(b.bidder, tariff, b.capacity_mw, "orange", partial, refusable, "Partial award" + why)
+            )
         else:
-            out.awards.append(Award(b.bidder, tariff, b.capacity_mw, "red", 0.0, False,
-                                    f"Only {remaining:.0f} MW left, below the 50 MW minimum"))
+            out.awards.append(
+                Award(
+                    b.bidder,
+                    tariff,
+                    b.capacity_mw,
+                    "red",
+                    0.0,
+                    False,
+                    f"Only {remaining:.0f} MW left, below the 50 MW minimum",
+                )
+            )
     out.awarded_mw = filled
     return out

@@ -29,7 +29,12 @@ def create_run(body: RunCreate):
 
 
 @router.get("", response_model=list[RunOut])
-def list_runs(kind: str | None = None, status: str | None = None, document_id: uuid.UUID | None = None, limit: int = 50):
+def list_runs(
+    kind: str | None = None,
+    status: str | None = None,
+    document_id: uuid.UUID | None = None,
+    limit: int = 50,
+):
     with SessionLocal() as s:
         q = select(Run).order_by(Run.created_at.desc()).limit(min(limit, 500))
         if kind:

@@ -1,4 +1,5 @@
 """What the Reader must get right on the three provided files."""
+
 from __future__ import annotations
 
 import pytest
@@ -47,8 +48,15 @@ def test_tender_pages_and_numbering(tender_pages, expected):
     assert page["pdf_page"] - page["printed_page"] == e["printed_page_offset"]
 
 
-@pytest.mark.parametrize("fact", [pytest.param(f, id=f["field"]) for f in __import__("json").loads(
-    (__import__("pathlib").Path(__file__).parent / "expected" / "tender_facts.json").read_text())["facts"]])
+@pytest.mark.parametrize(
+    "fact",
+    [
+        pytest.param(f, id=f["field"])
+        for f in __import__("json").loads(
+            (__import__("pathlib").Path(__file__).parent / "expected" / "tender_facts.json").read_text()
+        )["facts"]
+    ],
+)
 def test_golden_fact_quote_is_on_its_page(tender_pages, fact):
     """Golden set for the extractor: each fact's quote must exist on the cited page."""
     assert quote_on_page(fact["quote"], tender_pages["page_texts"][fact["pdf_page"] - 1]["text"])

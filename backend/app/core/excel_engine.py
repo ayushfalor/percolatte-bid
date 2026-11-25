@@ -10,6 +10,7 @@ Three jobs:
   parity()     recompute every formula and compare with the values Excel saved,
                so we can prove our engine agrees with Excel before trusting it
 """
+
 from __future__ import annotations
 
 import math
@@ -22,8 +23,8 @@ from typing import Any
 
 os.environ.setdefault("TQDM_DISABLE", "1")  # formulas shows progress bars while loading; keep logs clean
 
-import formulas  # noqa: E402
-from openpyxl import load_workbook  # noqa: E402
+import formulas
+from openpyxl import load_workbook
 
 _REF_RE = re.compile(r"^(?:'?(?P<sheet>[^!]+?)'?!)?\$?(?P<col>[A-Za-z]{1,3})\$?(?P<row>\d+)$")
 
@@ -109,7 +110,7 @@ class WorkbookEngine:
         self._model = formulas.ExcelModel().loads(path).finish()
         self._base = self._model.calculate()
         self.compile_ms = int((time.perf_counter() - t0) * 1000)
-        self._key_lookup = {k.upper(): k for k in self._base.keys()}
+        self._key_lookup = {k.upper(): k for k in self._base}
 
     # ---------- references ----------
     def normalize_ref(self, ref: str) -> str:
@@ -154,10 +155,7 @@ class WorkbookEngine:
         inputs = {self._key(r): v for r, v in overrides.items()}
         out_keys = {self._key(o): self.normalize_ref(o) for o in outputs}
         with self._lock:
-            if inputs:
-                sol = self._model.calculate(inputs=inputs, outputs=list(out_keys))
-            else:
-                sol = self._base
+            sol = self._model.calculate(inputs=inputs, outputs=list(out_keys)) if inputs else self._base
         result: dict[str, Any] = {}
         for key, norm in out_keys.items():
             found = sol.get(key)
@@ -208,8 +206,14 @@ class WorkbookEngine:
                 lo, hi = start - step, start + step
         flo, fhi = f(lo), f(hi)
         if flo is None or fhi is None or flo * fhi > 0:
-            return GoalSeekResult(None, None, calls, False, int((time.perf_counter() - t0) * 1000),
-                                  f"Could not bracket a solution for {tgt} = {target_value} by moving {var}")
+            return GoalSeekResult(
+                None,
+                None,
+                calls,
+                False,
+                int((time.perf_counter() - t0) * 1000),
+                f"Could not bracket a solution for {tgt} = {target_value} by moving {var}",
+            )
 
         side = 0
         x = lo
@@ -234,8 +238,9 @@ class WorkbookEngine:
                 if side == 1:
                     fhi /= 2
                 side = 1
-        return GoalSeekResult(x, None, calls, False, int((time.perf_counter() - t0) * 1000),
-                              "Did not converge within the iteration limit")
+        return GoalSeekResult(
+            x, None, calls, False, int((time.perf_counter() - t0) * 1000), "Did not converge within the iteration limit"
+        )
 
     # ---------- trust check ----------
     def parity(self, rel_tol: float = 1e-9, abs_tol: float = 1e-9) -> ParityReport:

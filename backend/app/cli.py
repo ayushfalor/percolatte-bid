@@ -1,12 +1,13 @@
 """Command line access to the deterministic tools, no database needed.
 
-  python -m app.cli structure path/to/model.xlsx
-  python -m app.cli evaluate  path/to/model.xlsx 'Returns!C8' --set Tariff=2.5
-  python -m app.cli goal-seek path/to/model.xlsx --variable Tariff --target 'Returns!C8' --value 0.14
-  python -m app.cli parity    path/to/model.xlsx
-  python -m app.cli tender    path/to/tender.pdf
-  python -m app.cli history   path/to/auction_history.xlsx
+python -m app.cli structure path/to/model.xlsx
+python -m app.cli evaluate  path/to/model.xlsx 'Returns!C8' --set Tariff=2.5
+python -m app.cli goal-seek path/to/model.xlsx --variable Tariff --target 'Returns!C8' --value 0.14
+python -m app.cli parity    path/to/model.xlsx
+python -m app.cli tender    path/to/tender.pdf
+python -m app.cli history   path/to/auction_history.xlsx
 """
+
 from __future__ import annotations
 
 import argparse
@@ -37,17 +38,21 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.cmd == "structure":
         from .core.workbook_reader import read_structure
+
         _out(read_structure(args.path))
     elif args.cmd == "tender":
         from .core.tender_reader import read_pages
+
         r = read_pages(args.path)
         r["page_texts"] = [{k: v for k, v in pg.items() if k != "text"} for pg in r["page_texts"]]
         _out(r)
     elif args.cmd == "history":
         from .core.history_reader import read_history
+
         _out(read_history(args.path))
     else:
         from .core.excel_engine import WorkbookEngine
+
         eng = WorkbookEngine(args.path)
         if args.cmd == "parity":
             _out(eng.parity().as_dict())

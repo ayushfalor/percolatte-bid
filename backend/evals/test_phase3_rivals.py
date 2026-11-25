@@ -1,4 +1,5 @@
 """Phase 3 gate: rival beliefs are sane, explained, reproducible and frozen."""
+
 from __future__ import annotations
 
 import statistics
@@ -26,8 +27,10 @@ def test_same_seed_same_snapshot(history):
 def test_cheaper_panels_move_rival_floors_down(history):
     from app.core.rival_model import build_snapshot
 
-    med = {r: statistics.median(p.floor_p50 for p in build_snapshot(history, r).profiles)
-           for r in ("history", "almm_40", "almm_100")}
+    med = {
+        r: statistics.median(p.floor_p50 for p in build_snapshot(history, r).profiles)
+        for r in ("history", "almm_40", "almm_100")
+    }
     assert med["history"] > med["almm_40"] > med["almm_100"]
 
 

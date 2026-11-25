@@ -3,6 +3,7 @@
 Output is a frozen snapshot: runs are never modified after they finish, so a
 rival snapshot is immutable by construction. New beliefs = a new run (v2).
 """
+
 from __future__ import annotations
 
 from typing import Any

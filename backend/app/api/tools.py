@@ -3,6 +3,7 @@
 These are the easiest entry points for an external eval suite: no queue, no
 LLM, plain JSON in and out.
 """
+
 from __future__ import annotations
 
 import time
@@ -44,7 +45,9 @@ def evaluate(document_id: uuid.UUID, body: EvaluateIn):
 def goal_seek(document_id: uuid.UUID, body: GoalSeekIn):
     eng = workbook_engine(document_id)
     try:
-        r = eng.goal_seek(body.variable, body.target, body.target_value, body.lower, body.upper, overrides=body.overrides)
+        r = eng.goal_seek(
+            body.variable, body.target, body.target_value, body.lower, body.upper, overrides=body.overrides
+        )
     except EngineError as exc:
         raise HTTPException(422, str(exc)) from exc
     return GoalSeekOut(**r.__dict__)

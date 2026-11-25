@@ -1,4 +1,5 @@
 """Auction history cleaning (deterministic, every fix is logged)."""
+
 from __future__ import annotations
 
 import re
@@ -57,10 +58,10 @@ def read_history(path: str) -> dict[str, Any]:
 
     return {
         "kind": "history",
-        "tenders": int(len(tenders)),
-        "bids": int(len(bids)),
+        "tenders": len(tenders),
+        "bids": len(bids),
         "categories": tenders["Category"].value_counts().to_dict() if "Category" in tenders else {},
-        "duplicates_removed": int(len(dupes)),
+        "duplicates_removed": len(dupes),
         "paise_tenders": paise_tenders,
         "raw_bidder_names": int(raw_names),
         "bidder_groups": int(groups),

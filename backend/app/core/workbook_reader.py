@@ -4,10 +4,12 @@ This is the Reader agent's deterministic core. It never assumes a layout:
 labels come from the nearest text to the left of a cell, and a cell's role
 (input, calculation, unused number) comes from the reference graph.
 """
+
 from __future__ import annotations
 
 import re
 from collections import Counter, defaultdict
+from itertools import pairwise
 from typing import Any
 
 from openpyxl import load_workbook
@@ -76,7 +78,7 @@ def _is_axis(values: list[Any]) -> bool:
     nums = [v for v in values if isinstance(v, (int, float)) and not isinstance(v, bool)]
     if len(nums) < 3 or any(float(n) != int(n) for n in nums):
         return False
-    diffs = {int(b) - int(a) for a, b in zip(nums, nums[1:])}
+    diffs = {int(b) - int(a) for a, b in pairwise(nums)}
     return diffs == {1}
 
 
@@ -112,15 +114,17 @@ def read_structure(path: str) -> dict[str, Any]:
                     numbers.append((ws.title, c.coordinate))
                 elif isinstance(v, str):
                     stats["text"] += 1
-        sheets.append({
-            "name": ws.title,
-            "state": ws.sheet_state,
-            "dimensions": ws.dimensions,
-            "formulas": stats["formulas"],
-            "numbers": stats["numbers"],
-            "text": stats["text"],
-            "merged_ranges": len(ws.merged_cells.ranges),
-        })
+        sheets.append(
+            {
+                "name": ws.title,
+                "state": ws.sheet_state,
+                "dimensions": ws.dimensions,
+                "formulas": stats["formulas"],
+                "numbers": stats["numbers"],
+                "text": stats["text"],
+                "merged_ranges": len(ws.merged_cells.ranges),
+            }
+        )
 
     incoming = Counter(dst for (_, dst) in sheet_links.elements())
     outgoing = Counter(src for (src, _) in sheet_links.elements())
@@ -169,7 +173,12 @@ def read_structure(path: str) -> dict[str, Any]:
         "kind": "workbook",
         "sheets": sheets,
         "defined_names": {name: dn.attr_text for name, dn in wbf.defined_names.items()},
-        "totals": {"sheets": len(sheets), "formulas": formula_count, "numbers": len(numbers), "comments": len(comments)},
+        "totals": {
+            "sheets": len(sheets),
+            "formulas": formula_count,
+            "numbers": len(numbers),
+            "comments": len(comments),
+        },
         "sheet_links": [{"from": a, "to": b, "references": n} for (a, b), n in sorted(sheet_links.items())],
         "inputs": inputs,
         "unreferenced_numbers": unused,
@@ -187,6 +196,7 @@ def find_by_label(structure: dict[str, Any], patterns: list[str], wb_path: str) 
                 if isinstance(c.value, str) and any(r.search(c.value) for r in regs) and not c.value.startswith("="):
                     for col in range(c.column + 1, min(c.column + 4, ws.max_column + 1)):
                         target = ws.cell(row=c.row, column=col)
-                        if target.value is not None and not (isinstance(target.value, str) and not target.value.startswith("=")):
+                        is_plain_text = isinstance(target.value, str) and not target.value.startswith("=")
+                        if target.value is not None and not is_plain_text:
                             return f"{ws.title}!{target.coordinate}"
     return None

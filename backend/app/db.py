@@ -2,6 +2,7 @@
 
 Schema changes during development: run `make reset` (drops the Docker volume).
 """
+
 from __future__ import annotations
 
 import logging

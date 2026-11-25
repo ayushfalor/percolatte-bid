@@ -25,6 +25,11 @@ jobs:
           cache-dependency-path: backend/requirements.lock
       - name: Install pinned dependencies
         run: pip install -r backend/requirements.lock
+      - name: Lint and format check (PEP 8)
+        working-directory: backend
+        run: |
+          python -m ruff check .
+          python -m ruff format --check .
       - name: Evals (unit, golden files, unseen workbook, phase gates, docs check)
         working-directory: backend
         run: python -m pytest -q -m "not stack"

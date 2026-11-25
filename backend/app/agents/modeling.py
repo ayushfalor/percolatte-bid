@@ -4,6 +4,7 @@ Built so far: the economics curve (equity IRR and min DSCR across tariffs),
 computed from the user's own workbook. Next: Monte Carlo against the frozen
 rival snapshot using core.auction_rules, then the price ladder.
 """
+
 from __future__ import annotations
 
 from typing import Any
@@ -14,7 +15,8 @@ from . import AgentContext, agent
 
 
 def _defaults(path: str, eng) -> tuple[str | None, str | None, str | None]:
-    variable = "Tariff" if any(n.upper() == "TARIFF" for n in eng.defined_names) else find_by_label({}, [r"^tariff"], path)
+    has_named_tariff = any(n.upper() == "TARIFF" for n in eng.defined_names)
+    variable = "Tariff" if has_named_tariff else find_by_label({}, [r"^tariff"], path)
     irr = find_by_label({}, [r"equity irr"], path)
     dscr = find_by_label({}, [r"min(imum)? dscr"], path)
     return variable, irr, dscr
@@ -37,12 +39,17 @@ def run(ctx: AgentContext) -> dict[str, Any]:
     overrides = ctx.params.get("overrides", {})
     outputs = [c for c in (irr_cell, dscr_cell) if c]
 
-    points, n = [], int(round((stop - start) / step)) + 1
+    points, n = [], round((stop - start) / step) + 1
     for i in range(n):
         tariff = round(start + i * step, 4)
         values = eng.evaluate({**overrides, variable: tariff}, outputs)
-        points.append({"tariff": tariff, "equity_irr": values.get(eng.normalize_ref(irr_cell)),
-                       "min_dscr": values.get(eng.normalize_ref(dscr_cell)) if dscr_cell else None})
+        points.append(
+            {
+                "tariff": tariff,
+                "equity_irr": values.get(eng.normalize_ref(irr_cell)),
+                "min_dscr": values.get(eng.normalize_ref(dscr_cell)) if dscr_cell else None,
+            }
+        )
         ctx.progress((i + 1) / (n + 2), f"Priced {i + 1} of {n} tariffs")
 
     hurdle = float(ctx.params.get("hurdle", 0.14))

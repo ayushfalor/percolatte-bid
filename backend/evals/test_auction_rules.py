@@ -1,4 +1,5 @@
 """The RfS's own worked examples are the ground truth for the auction rules."""
+
 from __future__ import annotations
 
 from app.core import auction_rules as r
@@ -17,9 +18,19 @@ def test_eligible_capacity_rule():
 
 
 def test_rfs_40_2_scenario_1_eliminates_h1():
-    bids = [r.Bid(b, cap, t) for b, cap, t in [
-        ("B8", 600, 1.50), ("B5", 300, 1.52), ("B1", 300, 1.53), ("B4", 250, 1.53),
-        ("B2", 300, 1.57), ("B3", 500, 1.60), ("B7", 200, 1.65), ("B6", 300, 1.71)]]
+    bids = [
+        r.Bid(b, cap, t)
+        for b, cap, t in [
+            ("B8", 600, 1.50),
+            ("B5", 300, 1.52),
+            ("B1", 300, 1.53),
+            ("B4", 250, 1.53),
+            ("B2", 300, 1.57),
+            ("B3", 500, 1.60),
+            ("B7", 200, 1.65),
+            ("B6", 300, 1.71),
+        ]
+    ]
     s = r.shortlist_for_era(bids)
     assert (s.total_bidders, s.total_bid_mw, s.eligible_mw) == (8, 2750, 700)
     assert s.eliminated == ["B6"] and len(s.shortlisted) == 7
@@ -48,8 +59,15 @@ def test_no_elimination_below_three_bidders():
 
 
 def test_rfs_41_3_illustration():
-    bids = [r.Bid("L1", 50, 1.65), r.Bid("L2", 150, 1.66), r.Bid("L3a", 200, 1.68, 1), r.Bid("L3b", 300, 1.68, 2),
-            r.Bid("L3c", 50, 1.68, 3), r.Bid("L4", 200, 1.70), r.Bid("L5", 100, 1.71)]
+    bids = [
+        r.Bid("L1", 50, 1.65),
+        r.Bid("L2", 150, 1.66),
+        r.Bid("L3a", 200, 1.68, 1),
+        r.Bid("L3b", 300, 1.68, 2),
+        r.Bid("L3c", 50, 1.68, 3),
+        r.Bid("L4", 200, 1.70),
+        r.Bid("L5", 100, 1.71),
+    ]
     a = r.allocate(bids, 700)
     assert a.l1 == 1.65 and a.band_ceiling == 1.68 and a.awarded_mw == 700
     assert [w.bidder for w in a.awards if w.awarded_mw > 0] == ["L1", "L2", "L3a", "L3b"]
@@ -78,14 +96,18 @@ def test_eighty_percent_rule_and_h1_knockout_never_happen_together():
     s = r.shortlist_for_era([r.Bid("A", 300, 2.40), r.Bid("B", 300, 2.50), r.Bid("C", 270, 2.60)])
     assert s.eligible_mw == 696 and s.eliminated == []
     # 0.8 x 1200 = 960 MW > 700: the full 700 MW is awarded and the single highest bidder goes
-    s = r.shortlist_for_era([r.Bid("A", 400, 2.40), r.Bid("B", 300, 2.50), r.Bid("C", 300, 2.55), r.Bid("D", 200, 2.60)])
+    s = r.shortlist_for_era(
+        [r.Bid("A", 400, 2.40), r.Bid("B", 300, 2.50), r.Bid("C", 300, 2.55), r.Bid("D", 200, 2.60)]
+    )
     assert s.eligible_mw == 700 and s.eliminated == ["D"]
 
 
 def test_partial_award_cliffs_for_a_200_mw_bid():
-    cases = [(590, "orange", 110, False),  # 110 MW is at least half of 200: must accept or lose the EMD
-             (620, "orange", 80, True),    # 80 MW is under half: may refuse, EMD returned
-             (660, "red", 0, False)]       # only 40 MW left: below the 50 MW minimum, nothing awarded
+    cases = [
+        (590, "orange", 110, False),  # 110 MW is at least half of 200: must accept or lose the EMD
+        (620, "orange", 80, True),  # 80 MW is under half: may refuse, EMD returned
+        (660, "red", 0, False),
+    ]  # only 40 MW left: below the 50 MW minimum, nothing awarded
     for cheaper_mw, zone, mw, refusable in cases:
         a = r.allocate([r.Bid("Rival", cheaper_mw, 2.40), r.Bid("Us", 200, 2.41)], 700).for_bidder("Us")
         assert (a.zone, a.awarded_mw, a.refusable) == (zone, mw, refusable), cheaper_mw

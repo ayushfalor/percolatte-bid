@@ -1,0 +1,15 @@
+# Lint and format config only. Pytest is configured in pytest.ini, which takes precedence.
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+
+[tool.ruff.lint]
+# SIM catches nested ifs, C4 and PERF catch append loops, RET catches else after return,
+# B catches mutable defaults, UP keeps us on modern syntax, I sorts imports.
+select = ["E", "F", "W", "I", "B", "UP", "SIM", "C4", "PERF", "RET", "RUF"]
+# We print the rupee sign and en dashes in user-facing strings and in the sample workbook's notes.
+ignore = ["RUF001", "RUF002", "RUF003"]
+
+[tool.ruff.lint.per-file-ignores]
+# FastAPI declares File/Query/Depends in argument defaults; that is the framework's idiom.
+"app/api/*.py" = ["B008"]

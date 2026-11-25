@@ -1,4 +1,5 @@
 """Docs are part of the product: a phase is not done until its doc answers reviewers' questions."""
+
 from __future__ import annotations
 
 import json

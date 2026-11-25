@@ -1,4 +1,5 @@
 """Request and response shapes. These are the API contract external evals rely on."""
+
 from __future__ import annotations
 
 import uuid

@@ -1,4 +1,5 @@
 """Same checks on a workbook the app has never seen (different layout, no names, no cached values)."""
+
 from __future__ import annotations
 
 import pytest

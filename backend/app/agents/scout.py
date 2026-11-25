@@ -3,6 +3,7 @@
 Live mode: Claude with the server-side web search tool. Offline mode: load the
 dated snapshot committed in data/snapshots/ so the demo runs without keys.
 """
+
 from __future__ import annotations
 
 from typing import Any

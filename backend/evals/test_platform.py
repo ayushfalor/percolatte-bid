@@ -1,4 +1,5 @@
 """Platform guarantees that every later phase relies on."""
+
 from __future__ import annotations
 
 

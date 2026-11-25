@@ -1,4 +1,5 @@
 """Health, agent list and a one-call self test (handy for reviewers and CI)."""
+
 from __future__ import annotations
 
 import time
@@ -48,8 +49,14 @@ def selftest():
             detail = fn()
             checks.append({"check": name, "ok": True, "detail": detail, "ms": int((time.perf_counter() - t0) * 1000)})
         except Exception as exc:
-            checks.append({"check": name, "ok": False, "detail": f"{type(exc).__name__}: {exc}",
-                           "ms": int((time.perf_counter() - t0) * 1000)})
+            checks.append(
+                {
+                    "check": name,
+                    "ok": False,
+                    "detail": f"{type(exc).__name__}: {exc}",
+                    "ms": int((time.perf_counter() - t0) * 1000),
+                }
+            )
 
     def db_check():
         with SessionLocal() as s:
@@ -69,9 +76,15 @@ def selftest():
         return {"equity_irr_at_2_62": round(irr, 6), "breakeven_tariff_14pct": round(seek.value, 4)}
 
     def rules_check():
-        bids = [rules.Bid("L1", 50, 1.65), rules.Bid("L2", 150, 1.66), rules.Bid("L3a", 200, 1.68, 1),
-                rules.Bid("L3b", 300, 1.68, 2), rules.Bid("L3c", 50, 1.68, 3), rules.Bid("L4", 200, 1.70),
-                rules.Bid("L5", 100, 1.71)]
+        bids = [
+            rules.Bid("L1", 50, 1.65),
+            rules.Bid("L2", 150, 1.66),
+            rules.Bid("L3a", 200, 1.68, 1),
+            rules.Bid("L3b", 300, 1.68, 2),
+            rules.Bid("L3c", 50, 1.68, 3),
+            rules.Bid("L4", 200, 1.70),
+            rules.Bid("L5", 100, 1.71),
+        ]
         alloc = rules.allocate(bids, 700)
         winners = [a.bidder for a in alloc.awards if a.awarded_mw > 0]
         assert winners == ["L1", "L2", "L3a", "L3b"], winners

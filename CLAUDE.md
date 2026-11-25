@@ -16,6 +16,7 @@ simulation, and a UI a non-technical bid manager can trust. They will run their 
 ## Commands
 - `make up` / `make down` / `make reset` (wipes the DB) / `make logs` / `make ps`
 - `make test`: fast evals on your machine, no Docker (`cd backend && pytest -q -m "not stack"`)
+- `make lint`: ruff check and ruff format --check on the backend (CI runs the same two commands)
 - `make eval`: full evals inside Docker against the running stack
 - `make smoke`: outside-in smoke test
 
@@ -32,6 +33,21 @@ simulation, and a UI a non-technical bid manager can trust. They will run their 
 10. Pin dependencies; after editing `backend/requirements.txt`, run `make lock`.
 11. Do not say a step is done until `make test` passes; a phase is not done until `make eval` passes
     and its doc is complete (`evals/test_docs.py`).
+
+## Python standards (backend)
+Style
+- PEP 8 and PEP 257, enforced by ruff (lint and format). `make lint` must pass; CI runs it.
+- Type hints on every function signature. Frozen dataclasses for data. pathlib, f-strings, logging (never print).
+- Flat code: guard clauses and early returns. No nested ifs that can be one condition (write `if a and b:`), no long if/elif ladders where a dict lookup works, no else after return.
+- Comprehensions, any(), all(), sum(), zip() and enumerate() instead of manual append loops and index arithmetic. Generators for large streams.
+- Small functions (aim under 40 lines), one job each. Descriptive snake_case names, UPPER_CASE constants, no magic numbers in logic.
+- Specific exceptions only (no bare except), no mutable default arguments, no dead or commented-out code, no TODO without a phase number.
+Performance
+- Measure first: every agent run records elapsed_ms; speed budgets live in the evals.
+- Never recalculate the workbook inside a loop when a precomputed curve plus interpolation will do. Cache compiled engines.
+- Number crunching (Monte Carlo, sweeps): vectorized NumPy, no per-draw Python loops where an array operation works.
+- Dicts and sets for lookups, not repeated list scans. Read each workbook once per run and reuse the result.
+- CPU-heavy work runs in the worker, never in an async API handler. Database: one session per request or job, no queries inside loops, select only the columns you need.
 
 ## Writing style for docs
 Plain English, short sentences, no em dashes. Explain like the reader is smart but new to the domain.

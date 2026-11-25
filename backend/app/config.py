@@ -4,6 +4,7 @@ The app must start with zero configuration (no .env, no API key). Without an
 ANTHROPIC_API_KEY it runs in "offline" mode: deterministic parts work fully,
 LLM parts fall back to cached outputs for the bundled sample files.
 """
+
 from __future__ import annotations
 
 from functools import lru_cache
