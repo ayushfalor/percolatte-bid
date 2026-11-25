@@ -1,0 +1,9 @@
+# Keeps the backend build context small (context is the repo root)
+.git
+**/node_modules
+**/__pycache__
+**/.pytest_cache
+**/.venv
+frontend
+*.pyc
+.env

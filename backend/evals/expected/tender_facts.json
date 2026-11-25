@@ -1,0 +1,32 @@
+{
+  "file": "tender.pdf",
+  "pdf_pages": 128,
+  "printed_page_offset": 1,
+  "note": "printed page = pdf page - 1. Every quote is checked to exist on its pdf page.",
+  "facts": [
+    {"field": "emd_per_mw", "value": 800000, "unit": "INR/MW", "clause": "16.1", "pdf_page": 21, "quote": "INR 8,00,000/MW (Indian Rupees Eight Lakh/MW Only)"},
+    {"field": "pbg_per_mw", "value": 2000000, "unit": "INR/MW", "clause": "17.1", "pdf_page": 23, "quote": "INR 20,00,000/MW/Project"},
+    {"field": "success_charge_per_mw", "value": 100000, "unit": "INR/MW plus taxes", "clause": "18.1", "pdf_page": 25, "quote": "INR 1,00,000/MW (Indian Rupees One Lakh/MW Only) + applicable taxes"},
+    {"field": "min_bid_mw", "value": 50, "unit": "MW", "clause": "5.1", "pdf_page": 9, "quote": "minimum quantum of Contracted Capacity of 50 MW"},
+    {"field": "max_bid_mw", "value": 700, "unit": "MW", "clause": "5.1", "pdf_page": 9, "quote": "maximum quantum of 700 MW"},
+    {"field": "capacity_step_mw", "value": 10, "unit": "MW", "clause": "5.1", "pdf_page": 9, "quote": "quoted in multiples of 10 MW only"},
+    {"field": "min_declared_cuf", "value": 0.25, "unit": "fraction", "clause": "8.1", "pdf_page": 13, "quote": "shall in no case be less than 25%"},
+    {"field": "cuf_band", "value": "+10% / -15%", "unit": "of declared CUF", "clause": "8.1", "pdf_page": 13, "quote": "within + 10% and -15% of the declared value"},
+    {"field": "cuf_hours_per_year", "value": 8766, "unit": "hours", "clause": "43.9", "pdf_page": 56, "quote": "MW*8766"},
+    {"field": "scsd_months_from_ppa", "value": 24, "unit": "months", "clause": "9.2", "pdf_page": 17, "quote": "shall be the date as on 24 months from the Effective Date of the PPA"},
+    {"field": "financial_closure_before_scsd_months", "value": 6, "unit": "months", "clause": "21.1", "pdf_page": 29, "quote": "Financial Closure by the date as on 6 months prior to the SCSD"},
+    {"field": "ppa_term_years", "value": 25, "unit": "years from SCSD", "clause": "20.2", "pdf_page": 27, "quote": "valid for a period of 25 years from the SCSD"},
+    {"field": "band_over_l1", "value": 0.02, "unit": "fraction of L1", "clause": "41.2", "pdf_page": 52, "quote": "+ 2% of the L1 tariff"},
+    {"field": "se_cap_mw", "value": 700, "unit": "MW", "clause": "40.2", "pdf_page": 50, "quote": "subject to maximum eligible capacity being 700 MW"},
+    {"field": "min_decrement", "value": 0.01, "unit": "INR/kWh", "clause": "40.4", "pdf_page": 51, "quote": "The minimum decrement value for tariff shall be INR 0.01 per kWh"},
+    {"field": "era_initial_minutes", "value": 30, "unit": "minutes", "clause": "40.4", "pdf_page": 52, "quote": "initial auction period will be of 30 (thirty) minutes"},
+    {"field": "era_extension_minutes", "value": 8, "unit": "minutes", "clause": "40.4", "pdf_page": 52, "quote": "auto extension by 8 (eight) minutes"},
+    {"field": "partial_refusal_threshold", "value": 0.5, "unit": "of quoted capacity", "clause": "41.4", "pdf_page": 53, "quote": "lower than 50% of the total quoted capacity"},
+    {"field": "almm_exempt", "value": true, "unit": "flag", "clause": "3.3", "pdf_page": 9, "quote": "exemption from Approved List of Models and Manufacturers (ALMM) requirements"},
+    {"field": "sez_status_loss_not_force_majeure", "value": true, "unit": "flag", "clause": "20.11", "pdf_page": 29, "quote": "these risks do not constitute a"},
+    {"field": "trading_margin", "value": 0.07, "unit": "INR/kWh", "clause": "43.64", "pdf_page": 61, "quote": "shall be @ INR 0.07/kWh"},
+    {"field": "net_worth_per_mw", "value": 8000000, "unit": "INR/MW", "clause": "36.1", "pdf_page": 45, "quote": "INR 80,00,000/MW (Indian Rupees Eighty Lakh/MW Only)"},
+    {"field": "drawl_point", "value": "Paradeep ISTS Substation", "unit": "text", "clause": "7.5", "pdf_page": 12, "quote": "Paradeep ISTS Substation"},
+    {"field": "gib_retrofit_rule", "value": true, "unit": "flag", "clause": "15.d", "pdf_page": 20, "quote": "Great Indian Bustard"}
+  ]
+}

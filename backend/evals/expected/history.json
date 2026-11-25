@@ -1,0 +1,10 @@
+{
+  "file": "auction_history.xlsx",
+  "tenders": 40,
+  "bids_after_dedupe": 315,
+  "duplicates_removed": 1,
+  "paise_tenders": ["MOCK-2023-008"],
+  "raw_bidder_names": 37,
+  "bidder_groups": 20,
+  "solar_ists_tenders": 13
+}

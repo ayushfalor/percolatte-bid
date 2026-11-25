@@ -1,0 +1,73 @@
+# One command: docker compose up --build   then open http://localhost:3000
+# Every setting has a default, so no .env file is needed. To change something,
+# copy .env.example to .env and edit it.
+
+name: bid-workbench
+
+x-backend-env: &backend-env
+  DATABASE_URL: postgresql+psycopg://bidbench:${POSTGRES_PASSWORD:-bidbench}@db:5432/bidbench
+  ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+  LLM_MODEL_SMART: ${LLM_MODEL_SMART:-claude-sonnet-5-5}
+  LLM_MODEL_FAST: ${LLM_MODEL_FAST:-claude-haiku-5-5}
+  SEED_SAMPLES: ${SEED_SAMPLES:-true}
+  SIM_SEED: ${SIM_SEED:-42}
+  LOG_LEVEL: ${LOG_LEVEL:-info}
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: bidbench
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-bidbench}
+      POSTGRES_DB: bidbench
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bidbench -d bidbench"]
+      interval: 3s
+      timeout: 3s
+      retries: 40
+    # No ports published on purpose: avoids clashing with a Postgres already on your machine.
+
+  api:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    image: bid-workbench-backend:local
+    environment: *backend-env
+    ports:
+      - "${API_PORT:-8000}:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=3)"]
+      interval: 5s
+      timeout: 5s
+      retries: 40
+      start_period: 10s
+    restart: unless-stopped
+
+  worker:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    image: bid-workbench-backend:local
+    command: ["python", "-m", "app.worker"]
+    environment: *backend-env
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+
+  web:
+    build: ./frontend
+    ports:
+      - "${WEB_PORT:-3000}:80"
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  pgdata:

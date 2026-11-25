@@ -1,0 +1,28 @@
+{
+  "file": "bid_model.xlsx",
+  "sheets": 8,
+  "formula_cells": 558,
+  "hidden_sheets": ["Inputs_old_v2"],
+  "defined_names": {"Tariff": "Inputs!$C$12", "Scenario": "Inputs!$C$5"},
+  "sheet_roles": {"Cover": "documentation", "Inputs_old_v2": "legacy_candidate", "CashFlow": "model", "Returns": "model"},
+  "kpis": {
+    "equity_irr": {"cell": "Returns!C8", "value": 0.142107489734805},
+    "project_irr_as_built": {"cell": "Returns!C9", "value": 0.11344730015704},
+    "min_dscr": {"cell": "Returns!C10", "value": 1.30927836411353}
+  },
+  "goal_seek": {"variable": "Tariff", "target": "Returns!C8", "target_value": 0.14, "expected": 2.6039, "tolerance": 0.0005},
+  "goal_seek_dscr": {"variable": "Tariff", "target": "Returns!C10", "target_value": 1.20, "expected": 2.3757, "tolerance": 0.0005},
+  "unreferenced_inputs": ["Inputs!C13", "Inputs!C28", "Returns!C11"],
+  "auditor_targets": [
+    {"id": "hardcode_in_formula_row", "where": "CashFlow!I10", "why": "Year-6 O&M typed as -14 inside a formula row (formula gives -16.23)"},
+    {"id": "truncated_range", "where": "Returns!C9", "why": "IRR(CashFlow!C26:AA26) drops year 25; sibling equity IRR uses C27:AB27"},
+    {"id": "orphan_input", "where": "Inputs!C28", "why": "Insurance 0.25% of capex is never referenced; comment says 'to be wired'"},
+    {"id": "cosmetic_input", "where": "Inputs!C13", "why": "PPA term input is not referenced; the 25-year horizon is fixed by the column layout"},
+    {"id": "stale_note", "where": "Returns!C16", "why": "Says 'last run gave 2.57'; live breakeven is 2.6039"},
+    {"id": "whole_number_percent", "where": "Inputs!C21", "why": "Interest stored as 9.25 and divided by 100 downstream; other % cells are fractions"},
+    {"id": "legacy_sheet", "where": "Inputs_old_v2", "why": "Hidden, unreferenced, conflicting values (250 MW, 2.71)"},
+    {"id": "tender_mismatch", "where": "Capex!D5", "why": "Modules priced as ALMM List-II while the RfS exempts ALMM (clauses 3.3, 35.2)"},
+    {"id": "tender_mismatch", "where": "Inputs!C11", "why": "8760 hours vs 8766 in the RfS CUF definition (clause 43.9)"}
+  ],
+  "corrected_breakeven": {"value": 2.6465, "tolerance": 0.0010, "fixes": ["CashFlow!I10 as formula", "insurance wired at 0.25% of capex", "8766 hours"]}
+}

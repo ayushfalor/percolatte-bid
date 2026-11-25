@@ -1,0 +1,86 @@
+/* Tokens: grid-paper base, transmission-steel ink, e-RA zone colours for status. */
+:root {
+  --paper: #f6f8f7;
+  --ink: #14232e;
+  --muted: #55636c;
+  --rule: #d5dde0;
+  --green: #1e7b4c;
+  --orange: #c9741a;
+  --red: #b3362b;
+  --blue: #1f5fa8;
+  color-scheme: light;
+  font-family: "Barlow", "Segoe UI", system-ui, sans-serif;
+  font-size: 17px;
+  line-height: 1.5;
+  color: var(--ink);
+  background: var(--paper);
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper: #10181e;
+    --ink: #e6ecef;
+    --muted: #9aa8b0;
+    --rule: #2a3740;
+    --green: #3fb27a;
+    --orange: #e3994a;
+    --red: #e0675b;
+    --blue: #6aa5ec;
+    color-scheme: dark;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; }
+main { max-width: 980px; margin: 0 auto; padding: 48px 24px 64px; }
+h1 { font-size: 2.6rem; font-weight: 700; letter-spacing: -0.01em; margin: 0 0 6px; }
+h2 { font-size: 1.25rem; font-weight: 600; margin: 0 0 12px; }
+.lede { color: var(--muted); max-width: 62ch; margin: 0; }
+section { margin-top: 44px; }
+.strip { display: grid; grid-template-columns: repeat(4, 1fr); border-top: 2px solid var(--ink); border-bottom: 1px solid var(--rule); }
+.status { display: flex; gap: 10px; padding: 16px 12px 16px 0; }
+.status + .status { padding-left: 16px; border-left: 1px solid var(--rule); }
+.status-title { font-weight: 600; }
+.status-detail { color: var(--muted); font-size: 0.9rem; }
+.dot { width: 12px; height: 12px; border-radius: 50%; margin-top: 6px; flex: none; }
+.dot-ok { background: var(--green); }
+.dot-busy { background: var(--orange); }
+.dot-down { background: var(--red); }
+.dot-off { background: transparent; border: 2px solid var(--muted); }
+.section-head { display: flex; align-items: baseline; gap: 16px; }
+table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+th { text-align: left; font-weight: 600; color: var(--muted); border-bottom: 1px solid var(--ink); padding: 6px 8px 6px 0; }
+td { border-bottom: 1px solid var(--rule); padding: 8px 8px 8px 0; vertical-align: top; }
+.num { text-align: right; }
+td.what { color: var(--muted); }
+.agents { list-style: none; padding: 0; margin: 0; }
+.agents li { padding: 8px 0; border-bottom: 1px solid var(--rule); }
+.agents strong { display: inline-block; min-width: 7.5em; }
+.agent-todo { color: var(--muted); }
+.tag { margin-left: 10px; font-size: 0.8rem; border: 1px solid var(--rule); border-radius: 3px; padding: 1px 6px; }
+.pill { font-size: 0.85rem; font-weight: 600; }
+.pill-succeeded { color: var(--green); }
+.pill-running, .pill-queued { color: var(--orange); }
+.pill-failed { color: var(--red); }
+.bar { display: inline-block; width: 70px; height: 6px; margin-left: 8px; background: var(--rule); vertical-align: middle; }
+.bar span { display: block; height: 100%; background: var(--orange); transition: width 0.4s; }
+.try { border-left: 4px solid var(--green); padding-left: 20px; }
+.try p { max-width: 64ch; }
+.try-row { display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; }
+label { display: grid; gap: 4px; font-weight: 600; font-size: 0.9rem; }
+input { font: inherit; padding: 8px 10px; width: 8em; border: 1px solid var(--muted); border-radius: 3px; background: transparent; color: var(--ink); }
+button { font: inherit; font-weight: 600; padding: 8px 16px; border-radius: 3px; border: 1px solid var(--blue); background: var(--blue); color: #fff; cursor: pointer; }
+button:disabled { opacity: 0.55; cursor: default; }
+button.ghost { background: transparent; color: var(--blue); padding: 4px 10px; }
+:focus-visible { outline: 3px solid var(--orange); outline-offset: 2px; }
+.answer { font-size: 1.1rem; margin-top: 16px; }
+.answer-number { font-size: 2rem; font-weight: 700; font-variant-numeric: tabular-nums; margin-right: 6px; }
+.note { color: var(--muted); font-size: 0.9rem; }
+.alert { color: var(--red); font-weight: 500; }
+code { font-size: 0.9em; background: var(--rule); padding: 1px 4px; border-radius: 3px; }
+a { color: var(--blue); }
+footer { margin-top: 56px; color: var(--muted); font-size: 0.9rem; }
+@media (max-width: 720px) {
+  .strip { grid-template-columns: 1fr 1fr; }
+  .status:nth-child(3) { border-left: none; padding-left: 0; }
+  h1 { font-size: 2rem; }
+}
+@media (prefers-reduced-motion: reduce) { .bar span { transition: none; } }
