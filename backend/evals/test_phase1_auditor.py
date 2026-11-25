@@ -285,3 +285,71 @@ def test_findings_endpoint(api_client):
     assert body["breakeven_as_received"] == pytest.approx(EXPECTED["goal_seek"]["expected"], abs=0.001)
     assert body["corrected_breakeven"] > body["breakeven_as_received"]
     assert all(f["title"] and f["evidence"] for f in body["findings"])
+
+
+# ---------- Phase 1b: shapes the reviewer found outside this repo ----------
+
+
+def test_whole_column_lookup_keeps_its_sheet_alive(whole_column_workbook):
+    """A sheet read only by VLOOKUP over whole columns is live, not an abandoned copy.
+
+    Whole-column references create no edges in a graph that expands ranges cell by cell, so the
+    sheet looks unreferenced and every number on it looks like an input nobody reads.
+    """
+    from app.core.audit import audit_workbook
+    from app.core.workbook_reader import read_structure
+
+    path, truth = whole_column_workbook
+    structure = read_structure(str(path))
+    roles = {sheet["name"]: sheet["role"] for sheet in structure["sheets"]}
+    assert roles[truth["lookup_sheet"]] == "model", roles
+
+    unread = {cell["cell"] for cell in structure["unreferenced_numbers"]}
+    assert not {c for c in unread if c.startswith(f"{truth['lookup_sheet']}!")}, unread
+
+    findings = audit_workbook(str(path), target_irr=truth["target_irr"])
+    noise = [f for f in findings if f.where == truth["lookup_sheet"] or f.where.startswith(f"{truth['lookup_sheet']}!")]
+    assert not noise, [(f.id, f.where) for f in noise]
+
+
+def test_whole_column_lookup_still_computes(whole_column_workbook):
+    from app.core.patching import engine_for
+
+    path, truth = whole_column_workbook
+    engine = engine_for(str(path))
+    got = engine.evaluate({}, [truth["equity_irr_cell"]])[truth["equity_irr_cell"]]
+    assert got == pytest.approx(truth["equity_irr"], rel=1e-9)
+
+
+def test_circular_reference_is_found_and_reported(idc_workbook):
+    """Interest during construction depends on total capex, which includes it."""
+    from app.core.patching import engine_for
+
+    path, truth = idc_workbook
+    engine = engine_for(str(path))
+    assert engine.cycles, "the IDC loop should be found when the workbook loads"
+    found = {cell for cycle in engine.cycles for cell in cycle}
+    assert truth["cycle_cells"] <= found, found
+    text = " ".join(c["text"] for c in engine.cycle_report)
+    assert "depends" in text.lower() and truth["idc_cell"] in text, text
+
+
+def test_circular_reference_is_solved(idc_workbook):
+    from app.core.patching import engine_for
+
+    path, truth = idc_workbook
+    engine = engine_for(str(path))
+    cells = [truth["total_capex_cell"], truth["idc_cell"], truth["equity_irr_cell"]]
+    got = engine.evaluate({}, cells)
+    assert got[truth["total_capex_cell"]] == pytest.approx(truth["total_capex"], abs=1e-3)
+    assert got[truth["idc_cell"]] == pytest.approx(truth["idc"], abs=1e-3)
+    assert got[truth["equity_irr_cell"]] == pytest.approx(truth["equity_irr"], abs=1e-5)
+
+
+def test_goal_seek_works_through_a_circular_reference(idc_workbook):
+    """The loop has to be re-solved at every tariff the solver tries, not solved once."""
+    from app.core.audit import breakeven_with_fixes
+
+    path, truth = idc_workbook
+    got = breakeven_with_fixes(str(path), [], target_irr=truth["target_irr"])
+    assert got == pytest.approx(truth["breakeven"], abs=1e-3)

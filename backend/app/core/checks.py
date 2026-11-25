@@ -257,10 +257,10 @@ def _named_after(model: Model, noun: str) -> set[str]:
 
 
 def _refs_of(model: Model, formula: str, sheet: str):
-    from .workbook_reader import formula_refs
+    from .workbook_reader import formula_refs, sheet_extents
 
     names = {name.upper(): dn.attr_text for name, dn in model.book.defined_names.items()}
-    return formula_refs(formula, sheet, names)
+    return formula_refs(formula, sheet, names, sheet_extents(model.book))
 
 
 def _label_of(model: Model, ref: str) -> str | None:

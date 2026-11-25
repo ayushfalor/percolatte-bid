@@ -285,3 +285,252 @@ def make_wind_with_planted_bugs(path: str) -> dict:
         "impact_typed_over": fixed_hardcode - as_is,
         "impact_insurance": with_insurance - as_is,
     }
+
+
+WHOLE_COLUMN_CUF = 0.36  # the scenario the lookup selects, different from WIND's own CUF
+
+
+def _wind_body(wb, p: dict, cuf_formula: str, extra_assumptions: list[list] | None = None) -> None:
+    """The shared wind model body: assumptions, the annual series and a summary."""
+    a = wb.active
+    a.title = "Assumptions"
+    a["A1"] = "WIND PROJECT ASSUMPTIONS"
+    a.merge_cells("A1:C1")
+    a.append(["Item", "Value", "Unit"])
+    rows = [
+        ("Capacity", p["capacity_mw"], "MW"),
+        ("CUF", cuf_formula, "fraction"),
+        ("Tariff", p["tariff"], "INR/kWh"),
+        ("Capex", p["capex_cr_per_mw"], "INR Cr/MW"),
+        ("O&M", p["om_lakh_per_mw"], "INR lakh/MW/yr"),
+        ("O&M escalation", p["om_escalation"], "fraction"),
+        ("Debt share", p["debt_share"], "fraction"),
+        ("Interest", p["interest"], "fraction"),
+        ("Loan tenor", p["tenor"], "yrs"),
+        ("Tax rate", p["tax"], "fraction"),
+        ("Depreciation life", p["dep_life"], "yrs"),
+        ("Availability loss", p["availability_loss"], "fraction"),
+    ]
+    for r in rows:
+        a.append(list(r))  # rows 3..14 -> B3 capacity ... B14 availability loss
+    for extra in extra_assumptions or []:
+        a.append(extra)  # appended last: the Annual formulas use absolute $B$3..$B$14
+
+    s = wb.create_sheet("Annual")
+    s.append(
+        [
+            "Year",
+            "Generation (MU)",
+            "Revenue",
+            "O&M",
+            "EBITDA",
+            "Opening debt",
+            "Interest",
+            "Principal",
+            "Closing debt",
+            "Depreciation",
+            "PBT",
+            "Tax",
+            "",
+            "Equity CF",
+        ]
+    )
+    A = "Assumptions!"
+    s.append([0, 0, 0, 0, 0, 0, 0, 0, f"={A}$B$3*{A}$B$6*{A}$B$9", 0, 0, 0, None, f"=-({A}$B$3*{A}$B$6*(1-{A}$B$9))"])
+    for r in range(3, 3 + p["years"]):
+        s.append(
+            [
+                f"=A{r - 1}+1",
+                f"={A}$B$3*{A}$B$4*8766/1000*(1-{A}$B$14)",
+                f"=B{r}*{A}$B$5/10",
+                f"=-{A}$B$3*{A}$B$7*(1+{A}$B$8)^(A{r}-1)/100",
+                f"=C{r}+D{r}",
+                f"=I{r - 1}",
+                f"=-F{r}*{A}$B$10",
+                f"=-IF(A{r}<={A}$B$11,$I$2/{A}$B$11,0)",
+                f"=F{r}+H{r}",
+                f"=-{A}$B$3*{A}$B$6/{A}$B$13",
+                f"=E{r}+G{r}+J{r}",
+                f"=-MAX(0,K{r}*{A}$B$12)",
+                None,
+                f"=E{r}+G{r}+H{r}+L{r}",
+            ]
+        )
+    last = 2 + p["years"]
+    m = wb.create_sheet("Summary")
+    m.append(["Metric", "Value"])
+    m.append(["Equity IRR", f"=IRR(Annual!N2:N{last})"])
+    m.append(["Total capex (INR Cr)", f"={A}B3*{A}B6"])
+    m.append(["Year-1 revenue (INR Cr)", "=Annual!C3"])
+
+
+def make_wind_whole_column(path: str) -> dict:
+    """A scenario tab that is read only through a whole-column lookup.
+
+    VLOOKUP(selector, Scenarios!A:C, 3, FALSE) gives the right CUF, but a reference graph that
+    skips whole-column references sees no edge into Scenarios at all, so the sheet looks like an
+    abandoned copy and its numbers look like inputs nobody reads.
+    """
+    p = {**WIND, "cuf": WHOLE_COLUMN_CUF}
+    wb = Workbook()
+    _wind_body(wb, p, "=VLOOKUP($B$15,Scenarios!A:C,3,FALSE)", [["Scenario", 2, "#"]])
+
+    sc = wb.create_sheet("Scenarios")
+    sc.append(["#", "Scenario", "CUF"])
+    sc.append([1, "Base", 0.34])
+    sc.append([2, "High", WHOLE_COLUMN_CUF])
+    sc.append([3, "Low", 0.31])
+    wb.save(path)
+    return {
+        "equity_irr_cell": "Summary!B2",
+        "tariff_cell": "Assumptions!B5",
+        "cuf_cell": "Assumptions!B4",
+        "lookup_sheet": "Scenarios",
+        "selected_cuf": WHOLE_COLUMN_CUF,
+        "target_irr": 0.12,
+        "equity_irr": wind_equity_irr(p),
+        "breakeven": wind_breakeven(0.12, p),
+    }
+
+
+# Interest during construction: the classic circular reference in a project finance model.
+# IDC is a share of total capex, and total capex includes IDC.
+IDC = {
+    "capacity_mw": 150,
+    "cuf": 0.34,
+    "tariff": 3.55,
+    "base_capex_cr": 800.0,
+    "om_lakh_per_mw": 9.0,
+    "om_escalation": 0.04,
+    "debt_share": 0.7,
+    "interest": 0.0925,
+    "tenor": 15,
+    "tax": 0.2517,
+    "dep_life": 25,
+    "availability_loss": 0.01,
+    "years": 25,
+}
+
+
+def idc_total_capex(p: dict = IDC) -> float:
+    """Solved in closed form: total = base + debt_share * interest * total."""
+    return p["base_capex_cr"] / (1 - p["debt_share"] * p["interest"])
+
+
+def idc_equity_irr(p: dict = IDC) -> float:
+    capex = idc_total_capex(p)
+    debt = capex * p["debt_share"]
+    cfs, opening = [-(capex - debt)], debt
+    for y in range(1, p["years"] + 1):
+        gen = p["capacity_mw"] * p["cuf"] * 8766 / 1000 * (1 - p["availability_loss"])
+        om = -p["capacity_mw"] * p["om_lakh_per_mw"] * (1 + p["om_escalation"]) ** (y - 1) / 100
+        ebitda = gen * p["tariff"] / 10 + om
+        interest = -opening * p["interest"]
+        principal = -(debt / p["tenor"]) if y <= p["tenor"] else 0.0
+        opening = opening + principal
+        dep = -capex / p["dep_life"]
+        tax = -max(0.0, (ebitda + interest + dep) * p["tax"])
+        cfs.append(ebitda + interest + principal + tax)
+    return _irr(cfs)
+
+
+def idc_breakeven(target_irr: float, p: dict = IDC) -> float:
+    lo, hi = 1.0, 8.0
+    for _ in range(100):
+        mid = (lo + hi) / 2
+        if idc_equity_irr({**p, "tariff": mid}) < target_irr:
+            lo = mid
+        else:
+            hi = mid
+    return hi
+
+
+def make_idc_loop(path: str) -> dict:
+    """A model whose capex depends on itself through interest during construction.
+
+    Excel solves this with iterative calculation turned on. Our formula library returns nothing
+    for the cycle by default, and zero when told to tolerate circularity, so both the capex and
+    every number built on it come out wrong unless the cycle is solved on purpose.
+    """
+    p = IDC
+    wb = Workbook()
+    a = wb.active
+    a.title = "Assumptions"
+    a["A1"] = "PROJECT ASSUMPTIONS"
+    a.append(["Item", "Value", "Unit"])
+    for row in [
+        ("Capacity", p["capacity_mw"], "MW"),
+        ("CUF", p["cuf"], "fraction"),
+        ("Tariff", p["tariff"], "INR/kWh"),
+        ("Base capex", p["base_capex_cr"], "INR Cr"),
+        ("O&M", p["om_lakh_per_mw"], "INR lakh/MW/yr"),
+        ("O&M escalation", p["om_escalation"], "fraction"),
+        ("Debt share", p["debt_share"], "fraction"),
+        ("Interest", p["interest"], "fraction"),
+        ("Loan tenor", p["tenor"], "yrs"),
+        ("Tax rate", p["tax"], "fraction"),
+        ("Depreciation life", p["dep_life"], "yrs"),
+        ("Availability loss", p["availability_loss"], "fraction"),
+    ]:
+        a.append(list(row))  # rows 3..14 -> B3 capacity ... B14 availability loss
+    a.append(["IDC", "=$B$9*$B$10*$B$16", "INR Cr"])  # row 15, reads total capex
+    a.append(["Total capex", "=$B$6+$B$15", "INR Cr"])  # row 16, reads IDC: the loop
+
+    s = wb.create_sheet("Annual")
+    s.append(
+        [
+            "Year",
+            "Generation (MU)",
+            "Revenue",
+            "O&M",
+            "EBITDA",
+            "Opening debt",
+            "Interest",
+            "Principal",
+            "Closing debt",
+            "Depreciation",
+            "PBT",
+            "Tax",
+            "",
+            "Equity CF",
+        ]
+    )
+    A = "Assumptions!"
+    s.append([0, 0, 0, 0, 0, 0, 0, 0, f"={A}$B$16*{A}$B$9", 0, 0, 0, None, f"=-({A}$B$16*(1-{A}$B$9))"])
+    for r in range(3, 3 + p["years"]):
+        s.append(
+            [
+                f"=A{r - 1}+1",
+                f"={A}$B$3*{A}$B$4*8766/1000*(1-{A}$B$14)",
+                f"=B{r}*{A}$B$5/10",
+                f"=-{A}$B$3*{A}$B$7*(1+{A}$B$8)^(A{r}-1)/100",
+                f"=C{r}+D{r}",
+                f"=I{r - 1}",
+                f"=-F{r}*{A}$B$10",
+                f"=-IF(A{r}<={A}$B$11,$I$2/{A}$B$11,0)",
+                f"=F{r}+H{r}",
+                f"=-{A}$B$16/{A}$B$13",
+                f"=E{r}+G{r}+J{r}",
+                f"=-MAX(0,K{r}*{A}$B$12)",
+                None,
+                f"=E{r}+G{r}+H{r}+L{r}",
+            ]
+        )
+    last = 2 + p["years"]
+    m = wb.create_sheet("Summary")
+    m.append(["Metric", "Value"])
+    m.append(["Equity IRR", f"=IRR(Annual!N2:N{last})"])
+    m.append(["Total capex (INR Cr)", f"={A}B16"])
+    wb.save(path)
+    return {
+        "equity_irr_cell": "Summary!B2",
+        "tariff_cell": "Assumptions!B5",
+        "idc_cell": "Assumptions!B15",
+        "total_capex_cell": "Assumptions!B16",
+        "cycle_cells": {"Assumptions!B15", "Assumptions!B16"},
+        "target_irr": 0.12,
+        "total_capex": idc_total_capex(p),
+        "idc": idc_total_capex(p) - p["base_capex_cr"],
+        "equity_irr": idc_equity_irr(p),
+        "breakeven": idc_breakeven(0.12, p),
+    }

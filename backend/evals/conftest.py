@@ -89,6 +89,24 @@ def bugged_workbook(tmp_path_factory):
 
 
 @pytest.fixture(scope="session")
+def whole_column_workbook(tmp_path_factory):
+    """A scenario tab read only through VLOOKUP over whole columns."""
+    from evals.fixtures.make_workbooks import make_wind_whole_column
+
+    path = tmp_path_factory.mktemp("unseen") / "wind_whole_column.xlsx"
+    return path, make_wind_whole_column(str(path))
+
+
+@pytest.fixture(scope="session")
+def idc_workbook(tmp_path_factory):
+    """A model whose capex depends on itself through interest during construction."""
+    from evals.fixtures.make_workbooks import make_idc_loop
+
+    path = tmp_path_factory.mktemp("unseen") / "idc_loop.xlsx"
+    return path, make_idc_loop(str(path))
+
+
+@pytest.fixture(scope="session")
 def api_url() -> str:
     url = os.environ.get("API_URL")
     if not url:

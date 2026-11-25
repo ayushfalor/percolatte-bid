@@ -26,7 +26,13 @@ os.environ.setdefault("TQDM_DISABLE", "1")  # formulas shows progress bars while
 import formulas
 from openpyxl import load_workbook
 
+from .workbook_reader import formula_refs, sheet_extents
+
 _REF_RE = re.compile(r"^(?:'?(?P<sheet>[^!]+?)'?!)?\$?(?P<col>[A-Za-z]{1,3})\$?(?P<row>\d+)$")
+
+CYCLE_MAX_ITERATIONS = 100
+CYCLE_TOLERANCE = 0.001  # INR crore, or whatever the cycle's cells are measured in
+CYCLE_MAX_CELLS = 12  # a bigger loop costs one recalculation per cell per pass; report it instead
 
 
 class EngineError(ValueError):
@@ -83,6 +89,89 @@ def _plain(value: Any) -> Any:
     return str(value)  # Excel errors (#DIV/0!, #NUM!) come back as strings
 
 
+def _strongly_connected(graph: dict[str, set[str]]) -> list[list[str]]:
+    """Tarjan, written as a loop so a deep model cannot blow the Python stack."""
+    index: dict[str, int] = {}
+    low: dict[str, int] = {}
+    on_stack: set[str] = set()
+    stack: list[str] = []
+    components: list[list[str]] = []
+    counter = 0
+
+    for root in graph:
+        if root in index:
+            continue
+        index[root] = low[root] = counter
+        counter += 1
+        stack.append(root)
+        on_stack.add(root)
+        work = [(root, iter(graph.get(root, ())))]
+        while work:
+            node, neighbours = work[-1]
+            descended = False
+            for nxt in neighbours:
+                if nxt not in index:
+                    index[nxt] = low[nxt] = counter
+                    counter += 1
+                    stack.append(nxt)
+                    on_stack.add(nxt)
+                    work.append((nxt, iter(graph.get(nxt, ()))))
+                    descended = True
+                    break
+                if nxt in on_stack:
+                    low[node] = min(low[node], index[nxt])
+            if descended:
+                continue
+            work.pop()
+            if work:
+                low[work[-1][0]] = min(low[work[-1][0]], low[node])
+            if low[node] == index[node]:
+                component = []
+                while True:
+                    popped = stack.pop()
+                    on_stack.discard(popped)
+                    component.append(popped)
+                    if popped == node:
+                        break
+                components.append(component)
+    return components
+
+
+def find_cycles(path: str) -> list[list[str]]:
+    """Cells that depend on themselves, directly or round a loop.
+
+    Excel calls this iterative calculation and solves it by repeating the sheet until it settles.
+    Our formula library returns nothing for a cycle, so we have to find them before trusting it.
+    """
+    book = load_workbook(path, data_only=False)
+    names = {name.upper(): dn.attr_text for name, dn in book.defined_names.items()}
+    extents = sheet_extents(book)
+    formulas_by_ref: dict[str, str] = {}
+    for ws in book.worksheets:
+        for row in ws.iter_rows():
+            for cell in row:
+                if isinstance(cell.value, str) and cell.value.startswith("="):
+                    formulas_by_ref[f"{ws.title}!{cell.coordinate}"] = cell.value
+
+    graph: dict[str, set[str]] = {}
+    for ref, formula in formulas_by_ref.items():
+        sheet = ref.rsplit("!", 1)[0]
+        reads = {f"{s}!{c}" for s, c in formula_refs(formula, sheet, names, extents)}
+        graph[ref] = {r for r in reads if r in formulas_by_ref}
+
+    cycles = [sorted(part) for part in _strongly_connected(graph) if len(part) > 1]
+    cycles.extend([ref] for ref, reads in graph.items() if ref in reads)
+    return sorted(cycles, key=len, reverse=True)
+
+
+def describe_cycle(cycle: list[str]) -> str:
+    """Plain English, so the finding reads like a sentence rather than a graph dump."""
+    if len(cycle) == 1:
+        return f"{cycle[0]} refers to itself."
+    chain = ", which depends on ".join(cycle)
+    return f"{chain}, which depends back on {cycle[0]}."
+
+
 class WorkbookEngine:
     """One loaded workbook. Thread-safe; compile once, evaluate many times."""
 
@@ -106,8 +195,13 @@ class WorkbookEngine:
                     if c.value is not None:
                         self.initial_values[f"{ws.title}!{c.coordinate}"] = c.value
 
+        self.cycles = find_cycles(path)
+        self.cycle_report = [{"cells": cycle, "text": describe_cycle(cycle)} for cycle in self.cycles]
+        self._cycle_cells = [c for cycle in self.cycles if len(cycle) <= CYCLE_MAX_CELLS for c in cycle]
+        self._cycle_base: dict[str, Any] | None = None
+
         t0 = time.perf_counter()
-        self._model = formulas.ExcelModel().loads(path).finish()
+        self._model = formulas.ExcelModel().loads(path).finish(circular=bool(self.cycles))
         self._base = self._model.calculate()
         self.compile_ms = int((time.perf_counter() - t0) * 1000)
         self._key_lookup = {k.upper(): k for k in self._base}
@@ -141,6 +235,11 @@ class WorkbookEngine:
 
     def current_value(self, ref: str) -> Any:
         norm = self.normalize_ref(ref)
+        if self._cycle_cells:
+            if self._cycle_base is None:
+                self._cycle_base = self._solve_cycles({})
+            if norm in self._cycle_base:
+                return self._cycle_base[norm]
         key = self._key_lookup.get(self._key(norm).upper())
         if key is not None:
             return _plain(self._base[key])
@@ -148,6 +247,39 @@ class WorkbookEngine:
 
     # ---------- evaluation ----------
     def evaluate(self, overrides: dict[str, Any] | None = None, outputs: list[str] | None = None) -> dict[str, Any]:
+        overrides = dict(overrides or {})
+        if self._cycle_cells:
+            # The caller's own overrides win: they may be pinning a cell inside the loop.
+            overrides = {**self._solve_cycles(overrides), **overrides}
+        return self._evaluate_once(overrides, outputs)
+
+    def _solve_cycles(self, overrides: dict[str, Any]) -> dict[str, Any]:
+        """Repeat the loop until it stops moving, the way Excel's iterative calculation does.
+
+        One recalculation per cell per pass: a cell's own formula can only be worked out when the
+        other cells in its loop are pinned to the current guess.
+        """
+        pinned = {self.normalize_ref(ref) for ref in overrides}
+        unknown = [cell for cell in self._cycle_cells if cell not in pinned]
+        if not unknown:
+            return {}
+        guess: dict[str, Any] = dict.fromkeys(unknown, 0.0)
+        for _ in range(CYCLE_MAX_ITERATIONS):
+            worst = 0.0
+            for cell in unknown:
+                others = {k: v for k, v in guess.items() if k != cell}
+                value = self._evaluate_once({**overrides, **others}, [cell]).get(cell)
+                if not isinstance(value, (int, float)) or isinstance(value, bool):
+                    continue
+                worst = max(worst, abs(float(value) - float(guess[cell])))
+                guess[cell] = float(value)
+            if worst < CYCLE_TOLERANCE:
+                break
+        return guess
+
+    def _evaluate_once(
+        self, overrides: dict[str, Any] | None = None, outputs: list[str] | None = None
+    ) -> dict[str, Any]:
         overrides = overrides or {}
         outputs = outputs or []
         if not outputs:

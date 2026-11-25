@@ -27,21 +27,46 @@ def _split_ref(ref: str, current_sheet: str) -> tuple[str, str]:
     return current_sheet, ref
 
 
-def _expand(addr: str) -> list[str]:
+def _expand(addr: str, extent: tuple[int, int, int, int] | None = None) -> list[str]:
+    """Every cell an address covers.
+
+    A whole-column reference like A:C or a whole-row like 1:1 has no bound on one side. Dropping
+    those loses the edge entirely, and a sheet read only by VLOOKUP(x, Scenarios!A:C, 3, FALSE)
+    then looks like nothing reads it. Clamp the open side to the target sheet's used range, which
+    is the only part that can hold anything.
+    """
     addr = addr.replace("$", "")
     try:
         min_col, min_row, max_col, max_row = range_boundaries(addr)
     except ValueError:
         return []
     if None in (min_col, min_row, max_col, max_row):
-        return []  # whole-row / whole-column references: skip cell expansion
+        if extent is None:
+            return []  # we do not know how big the target sheet is, so we cannot clamp
+        sheet_min_row, sheet_max_row, sheet_min_col, sheet_max_col = extent
+        min_row = min_row if min_row is not None else sheet_min_row
+        max_row = max_row if max_row is not None else sheet_max_row
+        min_col = min_col if min_col is not None else sheet_min_col
+        max_col = max_col if max_col is not None else sheet_max_col
     if (max_col - min_col + 1) * (max_row - min_row + 1) > MAX_RANGE_CELLS:
         return []
     return [f"{get_column_letter(c)}{r}" for r in range(min_row, max_row + 1) for c in range(min_col, max_col + 1)]
 
 
-def formula_refs(formula: str, sheet: str, names: dict[str, str]) -> list[tuple[str, str]]:
-    """All (sheet, cell) pairs a formula reads, with named ranges resolved."""
+def sheet_extents(book) -> dict[str, tuple[int, int, int, int]]:
+    """Used range per sheet as (min_row, max_row, min_col, max_col), for clamping open ranges."""
+    return {
+        ws.title: (ws.min_row or 1, ws.max_row or 1, ws.min_column or 1, ws.max_column or 1) for ws in book.worksheets
+    }
+
+
+def formula_refs(
+    formula: str, sheet: str, names: dict[str, str], extents: dict[str, tuple[int, int, int, int]] | None = None
+) -> list[tuple[str, str]]:
+    """All (sheet, cell) pairs a formula reads, with named ranges resolved.
+
+    Pass `extents` to follow whole-column and whole-row references; without it they are skipped.
+    """
     out: list[tuple[str, str]] = []
     try:
         tokens = Tokenizer(formula).items
@@ -55,7 +80,7 @@ def formula_refs(formula: str, sheet: str, names: dict[str, str]) -> list[tuple[
         if target:
             value = target
         s, addr = _split_ref(value, sheet)
-        out.extend((s, cell) for cell in _expand(addr))
+        out.extend((s, cell) for cell in _expand(addr, (extents or {}).get(s)))
     return out
 
 
@@ -116,6 +141,7 @@ def _name_of(ws, cell, row_numbers: list[Any]) -> tuple[str | None, str]:
 def read_structure(path: str) -> dict[str, Any]:
     wbf = load_workbook(path, data_only=False)
     names = {name.upper(): dn.attr_text for name, dn in wbf.defined_names.items()}
+    extents = sheet_extents(wbf)
 
     sheets: list[dict[str, Any]] = []
     refs_into: dict[tuple[str, str], int] = Counter()
@@ -136,7 +162,7 @@ def read_structure(path: str) -> dict[str, Any]:
                 if isinstance(v, str) and v.startswith("="):
                     stats["formulas"] += 1
                     formula_count += 1
-                    for s, cell in formula_refs(v, ws.title, names):
+                    for s, cell in formula_refs(v, ws.title, names, extents):
                         refs_into[(s, cell)] += 1
                         if s != ws.title:
                             sheet_links[(ws.title, s)] += 1

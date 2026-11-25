@@ -20,7 +20,7 @@ from openpyxl import load_workbook
 from openpyxl.formula.translate import Translator
 from openpyxl.utils.cell import coordinate_to_tuple, get_column_letter
 
-from .workbook_reader import formula_refs
+from .workbook_reader import formula_refs, sheet_extents
 
 MIN_RUN = 4  # fewer cells than this is not a filled-across row, it is a coincidence
 
@@ -121,9 +121,9 @@ def scalars(runs: list[Run]) -> set[str]:
     return {ref for run in runs for ref in run.refs}
 
 
-def _signed_pair(formula: str, sheet: str, names: dict[str, str], value_of) -> tuple[str, str] | None:
+def _signed_pair(formula: str, sheet: str, names: dict[str, str], value_of, extents=None) -> tuple[str, str] | None:
     """A formula that adds exactly two cells, one positive and one negative: (positive, negative)."""
-    refs = [f"{s}!{c}" for s, c in formula_refs(formula, sheet, names)]
+    refs = [f"{s}!{c}" for s, c in formula_refs(formula, sheet, names, extents)]
     if len(refs) != 2:
         return None
     first, second = (value_of(ref) for ref in refs)
@@ -149,6 +149,7 @@ class Margin:
 def _margins(book, runs: list[Run], value_of) -> list[Margin]:
     names = {name.upper(): dn.attr_text for name, dn in book.defined_names.items()}
     order = {name: i for i, name in enumerate(book.sheetnames)}
+    extents = sheet_extents(book)
     found: list[Margin] = []
     for run in runs:
         ws = book[run.sheet]
@@ -156,7 +157,7 @@ def _margins(book, runs: list[Run], value_of) -> list[Margin]:
             value = ws[coord].value
             if not _is_formula(value):
                 continue
-            pair = _signed_pair(value, run.sheet, names, value_of)
+            pair = _signed_pair(value, run.sheet, names, value_of, extents)
             if pair is None:
                 continue
             row, col = coordinate_to_tuple(coord)
