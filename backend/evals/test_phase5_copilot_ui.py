@@ -229,7 +229,9 @@ def test_brief_reads_only_stored_runs(api_client):
         assert run["status"] == "succeeded", (kind, run.get("error"))
     brief = api_client.get(f"/api/brief/{model['id']}").json()
     assert brief["pending"] == []
-    assert brief["walk_away"] == pytest.approx(2.6039, abs=5e-4) and brief["entry_bid"] >= brief["walk_away"]
+    assert any("A-03" in b for b in brief["basis"]), brief["basis"]
+    assert 2.2 < brief["walk_away"] < brief["corrected"] and brief["entry_bid"] > brief["walk_away"]
+    assert brief["target_high"] > brief["walk_away"]
     assert brief["as_received"] == pytest.approx(2.6039, abs=5e-4) and brief["corrected"] == pytest.approx(
         2.6465, abs=1e-3
     )

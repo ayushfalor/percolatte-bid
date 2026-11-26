@@ -22,8 +22,9 @@ export function Brief({ workbook, docs }: { workbook: Doc; docs: Doc[] }) {
       <section className="cards" aria-label="The three numbers">
         <Card title="Entry bid" value={inr(b.entry_bid)} note="Sealed envelope. Leaves room for the usual cut." />
         <Card title="Target range" value={b.target_low == null ? "n/a" : `${inr(b.target_low)} to ${inr(b.target_high)}`} note="Where chance of winning times profit is highest." />
-        <Card title="Walk-away" value={inr(b.walk_away)} note="Never go below this in the auction." tone="red" />
+        <Card title="Walk-away" value={inr(b.walk_away)} note={b.basis.length ? "On the corrected model with the levers below applied." : "Never go below this in the auction."} tone="red" />
       </section>
+      {b.basis.length > 0 && <p className="note">Floor computed on: {b.basis.join("; ")}.</p>}
       {b.reasons.length > 0 && <ul className="reasons">{b.reasons.map((r) => <li key={r}>{r}</li>)}</ul>}
       {b.pending.length > 0 && (
         <p className="alert">

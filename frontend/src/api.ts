@@ -33,6 +33,7 @@ export type Brief = {
   target_high: number | null;
   walk_away: number | null;
   reasons: string[];
+  basis: string[];
   bridge: BridgeStep[];
   depends_most_on: Driver[];
   must_dos: Record<string, MustDo>;

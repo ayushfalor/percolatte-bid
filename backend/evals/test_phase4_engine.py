@@ -212,7 +212,12 @@ def test_ladder_over_http(api_client):
     engine = wait(api_client.post("/api/runs", json={"kind": "engine", "document_id": model["id"]}).json()["id"])
     assert engine["status"] == "succeeded", engine.get("error")
     body = engine["result"]
-    assert len(body["ladder"]) == 81 and body["recommendation"]["walk_away"] == pytest.approx(2.6039, abs=5e-4)
+    assert len(body["ladder"]) == 81
+    assert body["as_received_breakeven"] == pytest.approx(2.6039, abs=5e-4)
+    # With the Auditor's certain fixes and the ALMM lever applied, the floor is where the field is.
+    assert any("A-03" in b for b in body["basis"]), body["basis"]
+    assert 2.2 < body["recommendation"]["walk_away"] < 2.35, body["recommendation"]
+    assert body["recommendation"]["entry_bid"] > body["recommendation"]["walk_away"]
 
 
 def test_entry_and_target_never_sit_below_the_walk_away(ladder):

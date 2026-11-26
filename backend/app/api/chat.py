@@ -148,6 +148,7 @@ def brief(document_id: uuid.UUID):
         target_high=rec.get("target_high"),
         walk_away=rec.get("walk_away"),
         reasons=list(rec.get("reasons", [])),
+        basis=list(((engine or {}).get("result") or {}).get("basis", [])),
         bridge=bridge_steps(findings, as_received, corrected) if findings and as_received and corrected else [],
         depends_most_on=(audit.get("drivers") or [])[:TOP_DRIVERS],
         must_dos=must_dos(facts),

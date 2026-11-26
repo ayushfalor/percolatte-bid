@@ -133,6 +133,7 @@ class BriefOut(BaseModel):
     target_high: float | None
     walk_away: float | None
     reasons: list[str] = Field(default_factory=list)  # the Engine's own words for the three numbers
+    basis: list[str] = Field(default_factory=list)  # what the floor was computed on: fixes and levers applied
     bridge: list[dict[str, Any]]
     depends_most_on: list[dict[str, Any]]
     must_dos: dict[str, Any]
