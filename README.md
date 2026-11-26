@@ -244,6 +244,24 @@ Where it breaks:
 - The rival model is calibrated on 13 mock solar auctions. With real history the archetype and floor rules are the same, but the numbers would move.
 - The tornado and the fix prices are first-order estimates from the local slope; only the corrected breakeven and the ladder's economics are solved exactly.
 
+## What we would improve with more time, and why
+
+Each line gives the change, the number that justifies it, and a rough effort. The numbers are this
+repo's own measurements unless the line says otherwise.
+
+| Improvement | Why, with the number | Rough effort |
+|---|---|---|
+| **Test every screen in a real browser, automatically** | The one bug that reached a user was a missing number in a stored run that blanked the page. All 249 automated tests were green, because none of them renders the UI. Mounting each screen against the running app in a headless browser takes about two seconds per screen (that check, run by hand, is how the bug was found) and would have caught it before the push. | 1 day |
+| **Make large models fast** | A 9,000-formula model loads in 25 s and recalculates in 4.7 s. Pricing one fix is a goal seek of about 8 recalculations (8 x 4.7 s = 38 s), so ten fixes on a model that size take about 6 minutes. Caching the compiled model across runs and pricing fixes from one shared sensitivity curve would bring an audit under a minute. | 3 days |
+| **More simulated auctions** | 5,000 draws put a 50% win chance within about ±1.4 points (sampling error, 95% band). 50,000 draws would make that ±0.4 points for about 1 s of compute instead of 0.1 s, still fast enough for the live screen to recompute on every typed bid. | Half a day |
+| **Calibrate rivals on real results** | The rival model learns from 13 mock auctions, with 37 bidder names grouped into 16 rivals in this field; 1 of the 16 bid in two or fewer of those auctions, so its stopping price is the field's average, not its own, and the same would be true of any newcomer. SECI publishes every solar ISTS result; loading them would give each serious rival its own record. | 2 days, plus the data |
+| **Build the Scout agent** | 0 of the 16 rivals has anything beyond its auction record. A web pass per rival (recent wins, module supply deals, financing news) adds the one thing history cannot show: who needs this win. | 3 days, needs a key |
+| **Feed the live auction without typing** | The SECI portal has no data feed, so the Live Auction screen takes bids by typing, a few seconds each during the hour that matters most. A screen-capture reader of the auction window would make that zero seconds and remove typing slips. | 4 days |
+| **Read tenders we have not seen, offline** | The 25 extraction rules were written against one RfS. On a new tender the model pass does the work and the rules fill gaps; without a key, only the rules run. Rules built across the last ten SECI and SJVN tenders would make offline reading as good as the model's. | 2 days per tender family |
+| **A checker that knows every unit** | Every number the Copilot writes is checked against a tool output; a number the checker cannot match withholds the whole answer. In one hour of testing, three correct answers were withheld (paise, a negative sign, an ID like A-03) until the checker learned those forms. Each new form is a line, but the list is still growing. | 1 day |
+| **Expected value in rupees** | The ladder's expected value is MW won times the margin over the floor, because the workbook's equity value is not wired through yet. With it, the target range would be stated in crore, which is what a board asks for. | 1 day |
+| **A team, not a single screen** | One project list, no accounts, one database. A bid team of five needs its own scenarios per person and a lock on the one Brief that goes to the board. | 3 days |
+
 ## LLM cost
 
 In offline mode, which is the default and the mode reviewers run, the cost is zero: no call leaves
