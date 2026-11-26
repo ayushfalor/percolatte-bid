@@ -28,9 +28,10 @@ further down is there if you ever want it, not something the evaluation needs.
 
 No `.env` file and no API key are needed. Without a key the app runs in **offline mode**:
 everything deterministic works fully and AI steps use cached results for the sample files.
-To turn on live AI (the Copilot answers free-form questions, tender extraction gets a model pass):
-`cp .env.example .env`, put the key you were given in `ANTHROPIC_API_KEY`, then `docker compose up -d`.
-The key is never in the repo; `.env` is ignored.
+To turn on live AI (the Copilot answers free-form questions, tender extraction gets a model pass), the
+demo key ships encrypted in `deploy/env.enc`; the passphrase comes with the submission note:
+`make env PHRASE=<that phrase>` writes `.env`, then `docker compose up -d`. Or `cp .env.example .env` and
+set `ANTHROPIC_API_KEY` to your own. The plain key is never in the repo; `.env` is ignored.
 
 Stop with `Ctrl+C` (or `docker compose down`). Wipe the database with `docker compose down -v`.
 
