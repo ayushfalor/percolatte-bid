@@ -13,4 +13,10 @@ step "UI loads";                   curl -fsS "$WEB/" | grep -q '<div id="root">'
 step "UI forwards API calls";      curl -fsS "$WEB/api/agents" | grep -q '"reader"' && echo ok
 step "Sample files loaded";        curl -fsS "$API/api/documents" | grep -q 'bid_model.xlsx' && echo ok
 step "Self test (engine + rules)"; curl -fsS "$API/api/selftest" | grep -q '"ok":true' && echo ok
+# The UI is a single bundle; its screens must be in it, named as the bid manager sees them.
+BUNDLE="$(curl -fsS "$WEB/" | grep -o '/assets/[^"]*\.js' | head -1)"
+step "UI names its screens";       curl -fsS "$WEB$BUNDLE" | grep -q 'War Room' && curl -fsS "$WEB$BUNDLE" | grep -q 'Bid Brief' && echo ok
+WORKBOOK="$(curl -fsS "$API/api/documents" | grep -o '"id":"[0-9a-f-]*","kind":"workbook"' | head -1 | cut -d'"' -f4)"
+step "Bid Brief answers";          curl -fsS "$API/api/brief/$WORKBOOK" | grep -q '"must_dos"' && echo ok
+step "Copilot answers, grounded";  curl -fsS -X POST "$API/api/chat" -H 'Content-Type: application/json' -d '{"message":"What must we have ready to bid?"}' | grep -q '"ungrounded":\[\]' && echo ok
 echo "All smoke checks passed."

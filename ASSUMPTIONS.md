@@ -28,4 +28,5 @@ here. Source types: **Tender** (RfS clause), **Model** (bid_model.xlsx), **Histo
 | A-20 | The tornado moves each input by 10% of its own value, either way | ±10% | Assumed | Auditor (tornado) | `core/audit.py` SWING |
 | A-21 | A tender mismatch is "high" when it is worth at least 1 paisa, otherwise "medium" | INR 0.01/kWh | Assumed | Auditor (severity) | `core/checks.py` BIG_IMPACT |
 | A-22 | A note is stale when the number it records is within 20% of the live breakeven but more than half a paisa off it | 20% band, 0.005 tolerance | Assumed | Auditor (stale notes) | `core/checks.py` STALE_BAND, STALE_TOLERANCE |
-
+| A-23 | The target range is every price within 90% of the best expected value above the walk-away | 90% | Assumed | Engine (recommend) | `core/simulate.py` TARGET_SHARE |
+| A-24 | The typical cut from sealed bid to final price, used to place the entry bid above the floor | 8 paise | History (median across solar ISTS bids) | Engine (recommend) | `core/simulate.py` TYPICAL_CUT |

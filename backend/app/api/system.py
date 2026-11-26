@@ -38,6 +38,26 @@ def agents():
     return [{"kind": a.kind, "title": a.title, "job": a.job, "built": a.built} for a in REGISTRY.values()]
 
 
+@router.get("/api/assumptions")
+def assumptions():
+    """The register, row by row, from ASSUMPTIONS.md as shipped in the image."""
+    from pathlib import Path
+
+    here = Path(__file__).resolve()
+    candidates = [p / "ASSUMPTIONS.md" for p in (here.parents[2], here.parents[3])]
+    file = next((c for c in candidates if c.is_file()), None)
+    if file is None:
+        return {"rows": [], "source": None}
+    rows = []
+    for line in file.read_text().splitlines():
+        if not line.startswith("| A-"):
+            continue
+        cells = [c.strip() for c in line.strip("|").split("|")]
+        if len(cells) >= 6:
+            rows.append(dict(zip(("id", "assumption", "value", "source", "used_by", "change_in"), cells, strict=False)))
+    return {"rows": rows, "source": str(file.name), "count": len(rows)}
+
+
 @router.get("/api/selftest")
 def selftest():
     """End-to-end check without any API key: DB, formula engine on the sample model, auction rules."""

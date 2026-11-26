@@ -36,6 +36,8 @@ Stop with `Ctrl+C` (or `docker compose down`). Wipe the database with `docker co
 | PEP 8 and format check | `make lint` (the same two commands CI runs) |
 | What is wrong with the bid model, priced in paise | `GET /api/workbooks/{id}/findings` |
 | Which inputs move the breakeven most | `GET /api/workbooks/{id}/drivers` |
+| The Bid Brief: three numbers, bridge, must-dos, from stored runs | `GET /api/brief/{id}` |
+| Ask a what-if; a scenario and an engine rerun come back | `POST /api/chat {"message": "What if CUF is 30%?"}` |
 
 ## Try your own files
 
@@ -74,7 +76,7 @@ browser ──> web (nginx + React) ──> api (FastAPI) ──> db (Postgres 1
 | Scout | Web research on rivals, facts with URL and date | planned |
 | Rival model | Per rival: chance of bidding at each price, and why. Frozen once computed | built (calibrated on history, three regimes) |
 | Engine | Win odds and profit at every price point, and how they move with inputs | built (price ladder, three numbers, replay) |
-| Copilot | Chat: what-ifs become scenarios, the engine reruns | planned |
+| Copilot | Chat: what-ifs become scenarios, the engine reruns | built (rule-based offline, every number grounded) |
 
 **Database: three tables.** `documents` (files, bytes stored in the row), `runs` (every agent
 execution: job queue, live progress and audit log; a finished run is never modified, which is what
@@ -130,7 +132,8 @@ Where it breaks:
 - Functions the formula library lacks (OFFSET, INDIRECT on a built string) are reported by cell; numbers that depend on them are withheld, not guessed.
 - Scanned PDFs need OCR, which is not built. Clause numbers on tender facts are best effort.
 - The Scout (web research on rivals) is not built; rival names are the history's grouped labels.
-- The copilot, the UI screens and deployment (phases 5 and 6) are not built.
+- Deployment (phase 6) is not built; the app runs locally in Docker.
+- The Audit screen has no fix toggles: formula-patch fixes cannot be toggled as plain overrides, and the UI never computes totals itself.
 - The economics curve does not carry equity value in crore yet, so expected value in crore needs a caller to supply npv_cr.
 
 TODO before submitting.

@@ -94,5 +94,15 @@ def tender_document_id() -> Any | None:
         return s.scalars(select(Document.id).where(Document.kind == "tender").limit(1)).first()
 
 
+def tender_path() -> str | None:
+    """A local file for the tender, so an agent can read it itself. Read-only."""
+    with SessionLocal() as s:
+        doc = s.scalars(select(Document).where(Document.kind == "tender").limit(1)).first()
+        if doc is None:
+            return None
+        ext = "." + doc.filename.rsplit(".", 1)[-1].lower()
+        return materialize(doc.sha256, ext, doc.content)
+
+
 # Import order = pipeline order, and REGISTRY keeps it, so do not let isort sort this line.
 from . import reader, auditor, scout, rival, modeling, copilot  # noqa: E402,F401,I001

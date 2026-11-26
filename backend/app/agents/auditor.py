@@ -10,17 +10,24 @@ from dataclasses import asdict
 from typing import Any
 
 from ..core.audit import audit_workbook, breakeven_with_fixes, corrected_breakeven_from, tornado
-from . import AgentContext, agent, tender_document_id
+from ..core.tender_extract import extract_facts
+from . import AgentContext, agent, tender_document_id, tender_path
 
 
 def _tender_facts(ctx: AgentContext) -> list[dict[str, Any]]:
-    """Facts from the tender agent's latest run.
+    """Facts for the model-versus-tender checks.
 
-    Empty until Phase 2 lands, which is fine: the model-against-itself checks do not need them.
+    The Reader's run on the tender carries them. When that run predates extraction, or has not
+    finished, the facts are read from the tender file directly: the rule pass needs no key and
+    takes about a second, so the corrected breakeven never depends on which run came first.
     """
     tender_id = tender_document_id()
     reader = ctx.latest_result("reader", tender_id) if tender_id else None
-    return list((reader or {}).get("facts", []))
+    facts = list((reader or {}).get("facts", []))
+    if facts:
+        return facts
+    path = tender_path()
+    return [asdict(f) for f in extract_facts(path)] if path else []
 
 
 @agent("auditor", "Auditor", "Finds model bugs and tender mismatches, prices each fix in INR/kWh")

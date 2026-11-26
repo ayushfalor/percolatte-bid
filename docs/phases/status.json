@@ -1,5 +1,5 @@
 {
-  "completed": 4,
-  "current": 5,
+  "completed": 5,
+  "current": 6,
   "note": "Bump 'completed' when a phase closes. Its tests then become mandatory in CI."
 }

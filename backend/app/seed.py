@@ -46,4 +46,32 @@ def seed_samples() -> int:
             created += int(was_created)
     if created:
         log.info("Seeded %d sample file(s) from %s", created, folder)
+    reread_stale_tenders()
     return created
+
+
+def reread_stale_tenders() -> int:
+    """Queue a fresh Reader run for a tender whose stored result predates fact extraction.
+
+    A database that outlived an upgrade keeps the old Reader result, which has no facts. Reading
+    the tender again heals it; finished runs are never edited, so this is a new row.
+    """
+    queued = 0
+    with SessionLocal() as s:
+        for doc in s.scalars(select(Document).where(Document.kind == "tender")):
+            latest = s.scalars(
+                select(Run)
+                .where(Run.kind == "reader", Run.document_id == doc.id)
+                .order_by(Run.created_at.desc())
+                .limit(1)
+            ).first()
+            if latest is None or latest.status in ("queued", "running"):
+                continue
+            if latest.status == "succeeded" and "facts" in (latest.result or {}):
+                continue
+            s.add(Run(kind="reader", document_id=doc.id, params={"reason": "stored result has no tender facts"}))
+            queued += 1
+        s.commit()
+    if queued:
+        log.info("Queued %d fresh Reader run(s) for tenders without facts", queued)
+    return queued

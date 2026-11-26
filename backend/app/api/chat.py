@@ -15,7 +15,8 @@ from sqlalchemy import select
 
 from ..agents import copilot
 from ..core.brief import bridge_steps, must_dos
-from ..core.contracts import Finding, Fix
+from ..core.contracts import Finding, Fix, RivalProfile, RivalSnapshot
+from ..core.simulate import replay
 from ..db import SessionLocal
 from ..files import materialize
 from ..models import Document, Run, Scenario
@@ -95,6 +96,21 @@ def chat(body: ChatIn):
         ungrounded=reply["ungrounded"],
         cost_usd=reply["cost_usd"],
     )
+
+
+@router.get("/replay/{document_id}")
+def replay_auction(
+    document_id: uuid.UUID, draw: int = 0, open: float = 2.45, floor: float = 2.28, regime: str = "almm_40"
+):
+    """One simulated e-RA, minute by minute, from the latest rival snapshot. For the war room."""
+    doc = _workbook(document_id)
+    rival = latest_run("rival")
+    stored = ((rival or {}).get("result") or {}).get("snapshots", {}).get(regime)
+    if not stored:
+        raise HTTPException(409, "No rival run yet; run the Rival model first")
+    snapshot = RivalSnapshot(**{**stored, "profiles": [RivalProfile(**p) for p in stored["profiles"]]})
+    our_mw = float(((latest_run("engine", doc.id) or {}).get("result") or {}).get("our_mw", 200))
+    return {"snapshot_id": snapshot.id, "draw": draw, "events": replay(snapshot, draw, open, floor, our_mw)}
 
 
 def _finding(row: dict[str, Any]) -> Finding:
