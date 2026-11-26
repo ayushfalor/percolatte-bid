@@ -1,0 +1,59 @@
+# Production on one VM: docker compose -f docker-compose.yml -f docker-compose.prod.yml up --build -d
+#
+# What changes from the local file:
+#   caddy    fronts the web container. Set DOMAIN (for example bid.example.com, pointed at this VM)
+#            and Caddy gets and renews the HTTPS certificate itself. Leave DOMAIN unset and it serves
+#            plain HTTP on port 80.
+#   backup   dumps the database every night into the `backups` volume, keeping 14 days
+#            (scripts/backup-db.sh). Restore with scripts/restore-db.sh.
+#   ports    only Caddy is published. The api and web ports stay inside the Docker network.
+#   restart  every service comes back after a reboot.
+# Secrets live in the host's .env (POSTGRES_PASSWORD, ANTHROPIC_API_KEY, DOMAIN); nothing is written here.
+
+services:
+  db:
+    restart: always
+
+  api:
+    restart: always
+    ports: !reset []
+
+  worker:
+    restart: always
+
+  web:
+    restart: always
+    ports: !reset []
+
+  backup:
+    image: bid-workbench-backend:local
+    restart: always
+    environment:
+      DATABASE_URL: postgresql+psycopg://bidbench:${POSTGRES_PASSWORD:-bidbench}@db:5432/bidbench
+      KEEP_DAYS: ${BACKUP_KEEP_DAYS:-14}
+    volumes:
+      - backups:/backups
+    depends_on:
+      db:
+        condition: service_healthy
+    command: ["bash", "-c", "while true; do bash scripts/backup-db.sh /backups || echo 'backup failed' >&2; sleep 86400; done"]
+
+  caddy:
+    image: caddy:2-alpine
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN:-}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - web
+
+volumes:
+  backups:
+  caddy_data:
+  caddy_config:

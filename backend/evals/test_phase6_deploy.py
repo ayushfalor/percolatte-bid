@@ -71,11 +71,17 @@ def test_llm_cost_section_is_honest(repo_root):
 
 
 def _tracked_files(repo_root) -> list[str]:
-    out = subprocess.run(["git", "ls-files"], cwd=repo_root, capture_output=True, text=True)
+    try:
+        out = subprocess.run(["git", "ls-files"], cwd=repo_root, capture_output=True, text=True)
+    except FileNotFoundError:  # no git binary inside the image
+        out = subprocess.CompletedProcess(args=[], returncode=1, stdout="")
     if out.returncode != 0:  # inside the image there is no .git; the file list is what was copied in
         found = (p for p in repo_root.rglob("*") if p.is_file() and ".venv" not in p.parts)
         return [str(p.relative_to(repo_root)) for p in found]
     return out.stdout.split()
+
+
+KEY_PREFIX = "sk-" + "ant-"  # built in two halves so this file does not trip its own check
 
 
 def test_secrets_never_in_the_repo(repo_root):
@@ -89,12 +95,14 @@ def test_secrets_never_in_the_repo(repo_root):
             text = path.read_text(errors="ignore")
         except OSError:
             continue
-        assert "sk-ant-" not in text, f"an API key is written into {name}"
+        assert KEY_PREFIX not in text, f"an API key is written into {name}"
 
 
 def test_production_compose_references_secrets_by_name(repo_root):
     prod = (repo_root / "docker-compose.prod.yml").read_text()
     for line in prod.splitlines():
+        if line.strip().startswith("#"):
+            continue  # a comment naming the variable is not a value
         if "ANTHROPIC_API_KEY" in line or "POSTGRES_PASSWORD" in line:
             assert "${" in line, f"a secret is written literally: {line.strip()}"
 

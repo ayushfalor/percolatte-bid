@@ -7,6 +7,9 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1
 
+# pg_dump and psql for the backup and restore scripts, which the nightly backup service runs from this image
+RUN apt-get update && apt-get install -y --no-install-recommends postgresql-client && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
 
 # Dependencies first, so code changes don't reinstall everything
@@ -17,10 +20,12 @@ COPY backend/app ./app
 COPY backend/evals ./evals
 COPY backend/pytest.ini ./pytest.ini
 COPY data/samples ./data/samples
-# Docs, README and scripts ship in the image so the docs checks run inside the container too
+# Docs, README, scripts and the deploy files ship in the image so every check runs inside the container too
 COPY docs ./docs
-COPY README.md ASSUMPTIONS.md ./
+COPY README.md ASSUMPTIONS.md docker-compose.yml docker-compose.prod.yml ./
 COPY scripts ./scripts
+COPY deploy ./deploy
+COPY .github ./.github
 
 RUN useradd --create-home --uid 10001 app && mkdir -p /tmp/bidbench && chown -R app /app /tmp/bidbench
 USER app

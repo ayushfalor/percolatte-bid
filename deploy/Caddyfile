@@ -1,0 +1,6 @@
+# With DOMAIN set, Caddy serves https://DOMAIN and renews the certificate itself.
+# Without it, plain HTTP on port 80 at the VM's address.
+{$DOMAIN::80} {
+	encode gzip
+	reverse_proxy web:80
+}

@@ -59,6 +59,36 @@ CI does this on every push, but do it once yourself too:
 | `bash: scripts/smoke.sh: /usr/bin/env: bash\r` | Windows line endings. `git config core.autocrlf input`, then clone again (`.gitattributes` prevents this for new clones) |
 | Out of disk | `docker system prune` (removes stopped containers and old images) |
 
+## Deploying to a VM
+
+One small VM (2 vCPU, 4 GB) with Docker Engine and the compose plugin is enough.
+
+1. On the VM: `sudo mkdir -p /opt/bid-workbench && sudo chown $USER /opt/bid-workbench`, then
+   `git clone https://github.com/ayushfalor/percolatte-bid.git /opt/bid-workbench`.
+2. `cd /opt/bid-workbench && cp .env.example .env`. Set `POSTGRES_PASSWORD` to something real.
+   Set `DOMAIN=bid.example.com` if a domain points at the VM (Caddy then does HTTPS); leave it
+   empty for plain HTTP. Set `ANTHROPIC_API_KEY` only if you want live extraction.
+3. `docker compose -f docker-compose.yml -f docker-compose.prod.yml up --build -d`.
+4. `bash scripts/smoke.sh` with `API_URL` and `WEB_URL` set to the public address.
+
+After that, deploys come from GitHub. Add four repository secrets: `DEPLOY_HOST`, `DEPLOY_USER`,
+`DEPLOY_SSH_KEY` (a private key whose public half is in the VM user's `authorized_keys`) and
+`DEPLOY_URL`. Then `git tag v1.0.0 && git push origin v1.0.0` runs `.github/workflows/deploy.yml`:
+it checks out the tag on the VM, restarts the stack, waits for health, runs the smoke test and
+the deployed-app check. Nothing secret is in the repo; `.env` is ignored.
+
+## Backups and restore
+
+The `backup` service in the production file runs `scripts/backup-db.sh /backups` every 24 hours
+and keeps 14 days of `bidbench-<timestamp>.sql.gz` in the `backups` volume. To copy a dump out:
+`docker compose cp backup:/backups ./backups`. To take one by hand from the host:
+`bash scripts/backup-db.sh ./backups`.
+
+Restore checks a dump without touching the live data: `bash scripts/restore-db.sh backups/<file>`
+loads it into a scratch database, prints `documents: N, runs: M`, and drops the scratch database.
+To replace the live database: stop the api and worker (`docker compose stop api worker`), run
+`FORCE=1 bash scripts/restore-db.sh backups/<file> bidbench`, then `docker compose start api worker`.
+
 ## Changing Python dependencies
 
 Edit `backend/requirements.txt`, run `make lock` to regenerate `backend/requirements.lock`
