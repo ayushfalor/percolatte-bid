@@ -80,39 +80,65 @@ def price_ladder(
 def recommend(
     ladder: list[LadderPoint], hurdle_tariff: float, dscr_tariff: float | None = None, max_h1_risk: float = 0.05
 ) -> Recommendation:
-    """walk_away = max(hurdle_tariff, dscr_tariff); target band = best expected value above it."""
+    """walk_away = max(hurdle_tariff, dscr_tariff); target band = best expected value above it.
+
+    Nothing here ever sits below the walk-away: an entry or target under the floor is not a bid,
+    it is a loss. When the floor is above every price on the grid, or nothing above it wins, the
+    numbers sit at the floor and the reasons say so in plain words.
+    """
     walk_away = max(hurdle_tariff, dscr_tariff or 0.0)
-    above = [p for p in ladder if p.tariff >= walk_away - 1e-9] or [max(ladder, key=lambda p: p.tariff)]
+    top = max(ladder, key=lambda p: p.tariff)
+    above = [p for p in ladder if p.tariff >= walk_away - 1e-9]
+    beyond_grid = not above  # the floor is above every price on the grid
+    if beyond_grid:
+        above = [top]
 
     def value(p: LadderPoint) -> float:
         # Expected value if the workbook gave one; else expected MW times margin over the floor.
         return p.expected_value_cr if p.expected_value_cr is not None else p.expected_mw * (p.tariff - walk_away)
 
     best = max(value(p) for p in above)
+    nothing_wins = best <= 0
     band = [p for p in above if value(p) >= TARGET_SHARE * best] if best > 0 else above[:1]
-    target_low, target_high = min(p.tariff for p in band), max(p.tariff for p in band)
+    target_low = max(min(p.tariff for p in band), walk_away)
+    target_high = max(max(p.tariff for p in band), walk_away)
 
     safe = [p for p in above if p.tariff >= walk_away + TYPICAL_CUT - 1e-9 and p.p_h1_eliminated <= max_h1_risk]
     entry = min(safe, key=lambda p: p.tariff) if safe else min(above, key=lambda p: (p.p_h1_eliminated, p.tariff))
+    entry_tariff = max(entry.tariff, walk_away)
     first_above = min(above, key=lambda p: p.tariff)
-    nothing_wins = best <= 0
+
+    if beyond_grid:
+        why_target = (
+            f"The walk-away {walk_away:.2f} is above the price grid ({ladder[0].tariff:.2f} to {top.tariff:.2f}): "
+            "as it stands this model cannot bid inside this tender's range. Entry and target are set at the floor."
+        )
+        why_entry = f"Entry {entry_tariff:.2f}: at the floor, since no price on the grid applies."
+    elif nothing_wins:
+        why_target = (
+            f"No price at or above the walk-away wins in this regime: the chance of winning is "
+            f"{first_above.p_win_any:.0%} at {first_above.tariff:.2f} and falls from there. The target and entry "
+            "sit at the floor because nothing above it has value; a lever that lowers the floor, such as the "
+            "ALMM module re-price, is what changes this."
+        )
+        why_entry = f"Entry {entry_tariff:.2f}: the first price above the floor; nothing on the grid wins."
+    else:
+        why_target = (
+            f"Target {target_low:.2f} to {target_high:.2f}: "
+            f"within {TARGET_SHARE:.0%} of the best expected value above the floor."
+        )
+        why_entry = (
+            f"Entry {entry_tariff:.2f}: room for the typical {TYPICAL_CUT * 100:.0f} paise cut, "
+            f"{entry.p_h1_eliminated:.1%} chance of going out as H1."
+        )
     reasons = [
         f"Walk-away {walk_away:.2f}: the stricter of the {hurdle_tariff:.2f} hurdle tariff"
         + (f" and the {dscr_tariff:.2f} DSCR tariff." if dscr_tariff else "."),
-        (
-            f"No price at or above the walk-away wins in this regime: the chance of winning is "
-            f"{first_above.p_win_any:.0%} at {first_above.tariff:.2f} and falls from there. The target and entry "
-            f"sit at the floor because nothing above it has value; a lever that lowers the floor, such as the "
-            f"ALMM module re-price, is what changes this."
-            if nothing_wins
-            else f"Target {target_low:.2f} to {target_high:.2f}: "
-            f"within {TARGET_SHARE:.0%} of the best expected value above the floor."
-        ),
-        f"Entry {entry.tariff:.2f}: room for the typical {TYPICAL_CUT * 100:.0f} paise cut, "
-        f"{entry.p_h1_eliminated:.1%} chance of going out as H1.",
+        why_target,
+        why_entry,
     ]
     return Recommendation(
-        entry_bid=entry.tariff, target_low=target_low, target_high=target_high, walk_away=walk_away, reasons=reasons
+        entry_bid=entry_tariff, target_low=target_low, target_high=target_high, walk_away=walk_away, reasons=reasons
     )
 
 

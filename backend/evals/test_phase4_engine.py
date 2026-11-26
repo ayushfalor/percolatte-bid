@@ -213,3 +213,16 @@ def test_ladder_over_http(api_client):
     assert engine["status"] == "succeeded", engine.get("error")
     body = engine["result"]
     assert len(body["ladder"]) == 81 and body["recommendation"]["walk_away"] == pytest.approx(2.6039, abs=5e-4)
+
+
+def test_entry_and_target_never_sit_below_the_walk_away(ladder):
+    """A wind model's floor is above this tender's price grid. The answer is the floor, said plainly."""
+    from app.core.simulate import recommend
+
+    rec = recommend(ladder, hurdle_tariff=3.59)
+    assert rec.walk_away == pytest.approx(3.59)
+    assert rec.entry_bid >= rec.walk_away and rec.target_low >= rec.walk_away and rec.target_high >= rec.walk_away
+    assert any("above the price grid" in r for r in rec.reasons), rec.reasons
+    for hurdle in (2.28, 2.60, 2.79):
+        r = recommend(ladder, hurdle_tariff=hurdle)
+        assert r.entry_bid >= r.walk_away - 1e-9 and r.target_low >= r.walk_away - 1e-9, hurdle
