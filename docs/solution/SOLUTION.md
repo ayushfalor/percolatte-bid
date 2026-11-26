@@ -30,7 +30,7 @@ browser -> web (nginx + React) -> api (FastAPI) -> db (Postgres 16)
                                   worker (agents) ---+  polls the runs table
 ```
 
-- **Three tables.** `documents` (files, bytes in the row), `runs` (every agent run: queue, progress,
+- **Three working tables plus `settings`** (the key pasted on the Setup screen, D-012). `documents` (files, bytes in the row), `runs` (every agent run: queue, progress,
   audit log; write-once), `scenarios` (named what-ifs). Agent outputs are JSONB.
 - **Async.** The API queues a run; the worker claims it with `FOR UPDATE SKIP LOCKED`, reports
   progress and stores the result. Scale with `--scale worker=3`.
@@ -114,6 +114,17 @@ differences come from inputs, not luck.
 - **Real names** (ReNew, Adani Green, JSW Neo...) come from Scout and map visibly to a type, with an
   "assumed" badge and a toggle to anonymize.
 - **Smaller field** than vanilla tenders: SEZ/EOU status and a connectivity grant are required.
+
+### The live auction (D-013)
+
+On the day the portal shows our price, our rank, the lowest price and the clock; nothing else. The Live
+Auction screen takes those lines by typing and treats each as a constraint on the frozen rival draws: a
+named rival is in and ends at or under its last bid, an L1 line means some rival ends at or under it, rank
+r means r-1 rivals end under us. The simulated auctions that agree are priced with the same settlement
+rules as the ladder, and the advice reads off that: hold while in the band with time left, cut to the
+best price inside the band when outside it or in the last eight minutes, walk away when the band sits
+under the walk-away or nothing above it wins. Under 200 surviving auctions the draws are bent instead
+(floors capped at the bids) and the screen says so. The snapshot is never written.
 
 ## Rules we rely on (corrected)
 

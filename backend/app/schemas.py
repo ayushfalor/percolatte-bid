@@ -140,3 +140,49 @@ class BriefOut(BaseModel):
     snapshot_id: str | None
     sources: dict[str, Any]  # which run each block came from, so every number is one click from its origin
     pending: list[str]  # agent runs that have not finished yet, so the UI can say what is still coming
+
+
+class LlmSettingIn(BaseModel):
+    secret: str = Field(description="An Anthropic key, or the passphrase from the submission note")
+
+
+class LlmSettingOut(BaseModel):
+    mode: str  # live | offline
+    source: str  # env | saved | none
+    unlockable: bool  # deploy/env.enc is in this build, so a passphrase works
+    model: str
+
+
+class ObservationIn(BaseModel):
+    minute: int = Field(ge=0, le=240, description="Minute of the e-RA the bid was seen at")
+    bidder: str = Field(description="A rival's name as the Rivals screen spells it, or L1 for the lowest price shown")
+    tariff: float = Field(gt=0, lt=20)
+
+
+class LiveIn(BaseModel):
+    observations: list[ObservationIn] = Field(default_factory=list)
+    our_price: float = Field(gt=0, lt=20, description="Where we stand on the board right now")
+    minutes_left: int = Field(default=30, ge=0, le=240, description="The portal's countdown")
+    our_rank: int | None = Field(default=None, ge=1, description="Our rank as the portal shows it, if known")
+    assume_pace_holds: bool = Field(default=False, description="Also assume each rival keeps cutting at its pace")
+    regime: str | None = None
+
+
+class LiveOut(BaseModel):
+    minutes_left: int
+    l1: float | None
+    band_ceiling: float | None
+    in_band: bool | None
+    survivors: int
+    of: int
+    matched: bool
+    ladder: list[dict[str, Any]]
+    recommendation: dict[str, Any]
+    action: str  # hold | cut | walk away
+    cut_to: float | None
+    at_our_price: dict[str, Any]
+    best: dict[str, Any] | None
+    why: list[str]
+    pace: list[dict[str, Any]]
+    caveats: list[str]
+    snapshot_id: str

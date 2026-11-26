@@ -9,7 +9,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from . import __version__
-from .api import chat, documents, runs, scenarios, system, tools
+from .api import chat, documents, live, runs, scenarios, system, tender, tools
+from .api import settings as llm_settings
 from .config import get_settings
 from .db import init_db
 from .seed import seed_samples
@@ -28,5 +29,5 @@ async def lifespan(_: FastAPI):
 
 app = FastAPI(title="Bid Workbench API", version=__version__, lifespan=lifespan)
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
-for module in (system, documents, runs, scenarios, tools, chat):
+for module in (system, documents, runs, scenarios, tools, chat, live, tender, llm_settings):
     app.include_router(module.router)

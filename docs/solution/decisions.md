@@ -61,3 +61,22 @@ Re-pricing modules at the mock INR 10/Wp (A-03) moves the breakeven by about 37 
 swamp everything else and bake an assumption into a headline figure. It stays a lever instead.
 Gave up: a single number that includes the ALMM upside; the bridge on the Bid Brief shows it as its
 own step.
+
+**D-012 A fourth table, `settings`, for the key pasted on the Setup screen.**
+Why: reviewers run with no `.env` and no terminal habit. The Setup screen takes a key, or the
+passphrase that unlocks the demo key shipped encrypted in `deploy/env.enc`, checks it with one
+tiny call, and keeps it in `settings`. Both the API and the worker read that row (the environment
+still wins when set), so a tender uploaded later gets its model pass too. The row is a setting,
+not an agent result, so write-once runs are untouched. Gave up: keeping the schema at three tables;
+an environment-only key, which needed a terminal step evaluators kept tripping on.
+
+**D-013 The live auction conditions the frozen rival draws by rejection, never by editing them.**
+Why: on the day, the portal shows our price, our rank, the lowest price and the clock, and market
+talk sometimes adds who is where. Each typed line is a constraint: a named rival is in and ends at
+or under its last bid; an L1 line means some rival ends at or under it; rank r means r-1 rivals end
+under us. The 5,000 simulated auctions are filtered to the ones that agree, and the same settlement
+rules as the War Room price every tariff over the survivors. Fewer than 200 survivors means the
+field is cutting below anything in its record; then every draw is bent instead (the rival's floor
+capped at its bid) and the screen says so. The snapshot is never written; the same board gives the
+same answer. Gave up: a live feed from the portal (it has none) and a Bayesian update of the
+profiles themselves, which would have made the Rivals screen disagree with the Live screen.

@@ -14,6 +14,7 @@ from typing import Any
 from ..core.excel_engine import get_engine
 from ..core.history_reader import read_history
 from ..core.tender_extract import extract_facts, last_cost_usd, unusual_clauses
+from ..core.tender_plain import explain
 from ..core.tender_reader import read_pages
 from ..core.workbook_reader import read_structure
 from . import AgentContext, agent
@@ -36,7 +37,7 @@ def run(ctx: AgentContext) -> dict[str, Any]:
         facts = extract_facts(path, mode=ctx.params.get("mode", "auto"))
         unusual = unusual_clauses(path, mode=ctx.params.get("mode", "auto"))
         result["facts"] = [asdict(f) for f in facts]
-        result["unusual_clauses"] = [asdict(f) for f in unusual]
+        result["unusual_clauses"] = [{**asdict(f), "meaning": explain(asdict(f))} for f in unusual]
         result["verified"] = sum(1 for f in facts if f.verified)
         result["sources"] = dict(Counter(f.source for f in facts))
         result["cost_usd"] = last_cost_usd()

@@ -31,7 +31,7 @@ export function Copilot({ workbookId, open, onClose }: { workbookId?: string; op
         <h2>Copilot</h2>
         <button className="ghost" onClick={onClose}>Close</button>
       </div>
-      <p className="note">Every number in an answer comes from a tool. A what-if saves a scenario and reruns the Engine; the War Room shows it as a ghost line.</p>
+      <p className="note">Ask in plain words: a what-if ("what if CUF is 30%?"), a price ("should we bid at 2.40?"), or what is wrong with the model. Every number in an answer comes from the app’s own tools, never from the model’s imagination.</p>
       <div className="turns">
         {turns.map((t, i) => (
           <div key={i} className={`turn turn-${t.who}`}>
@@ -42,7 +42,7 @@ export function Copilot({ workbookId, open, onClose }: { workbookId?: string; op
                 {t.reply.run_id && <> · engine run {t.reply.run_id.slice(0, 8)}</>}
               </p>
             )}
-            {t.reply && t.reply.grounded.length > 0 && <p className="note">from tools: {t.reply.grounded.slice(0, 6).join(", ")}</p>}
+            {t.reply && t.reply.grounded.length > 0 && <p className="note">numbers checked against: {t.reply.grounded.slice(0, 6).join(", ")}</p>}
           </div>
         ))}
       </div>

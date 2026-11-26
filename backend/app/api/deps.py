@@ -6,6 +6,7 @@ from dataclasses import asdict
 from fastapi import HTTPException
 from sqlalchemy import select
 
+from ..core.contracts import RivalProfile, RivalSnapshot
 from ..core.excel_engine import WorkbookEngine, get_engine
 from ..core.tender_extract import extract_facts
 from ..db import SessionLocal
@@ -77,3 +78,26 @@ def latest_tender_facts() -> list[dict]:
             path = materialize(tender.sha256, ext, tender.content)
             _facts_by_hash[tender.sha256] = [asdict(f) for f in extract_facts(path)]
         return _facts_by_hash[tender.sha256]
+
+
+def workbook_document(document_id: uuid.UUID | None) -> Document:
+    """The bid model to work on: the one asked for, or the first one uploaded."""
+    if document_id is not None:
+        doc = load_document(document_id)
+        if doc.kind != "workbook":
+            raise HTTPException(400, f"Document {document_id} is a {doc.kind}, not a bid model")
+        return doc
+    with SessionLocal() as s:
+        doc = s.scalars(select(Document).where(Document.kind == "workbook").order_by(Document.created_at)).first()
+        if doc is None:
+            raise HTTPException(404, "No bid model uploaded yet")
+        _ = doc.content
+        return doc
+
+
+def latest_snapshot(regime: str) -> RivalSnapshot | None:
+    """The frozen rival beliefs for one regime, from the latest finished Rival run."""
+    stored = (((latest_run("rival") or {}).get("result") or {}).get("snapshots") or {}).get(regime)
+    if not stored:
+        return None
+    return RivalSnapshot(**{**stored, "profiles": [RivalProfile(**p) for p in stored["profiles"]]})

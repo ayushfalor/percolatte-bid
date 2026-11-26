@@ -35,6 +35,9 @@ On Windows, run these in a WSL terminal (Ubuntu) or Git Bash.
 - **Windows:** install Docker Desktop with the WSL 2 option, then clone the repo inside WSL
   (for example `~/code`), not under `C:\`, for much faster builds.
 - **Linux:** install Docker Engine and the compose plugin; add yourself to the `docker` group.
+- **Live AI (optional):** open http://localhost:3000, Setup, the Live AI box. Paste your own Anthropic
+  key or the passphrase from the submission note. It is checked once and kept only in the app's local
+  database; "Turn off and forget the key" removes it. A key in `.env` always wins over a saved one.
 
 ## Before submitting: the fresh-clone test
 

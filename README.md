@@ -8,7 +8,14 @@ finds what is wrong, and prices the bid: win odds and profit at every tariff.
 
 ## Run it
 
-You need Docker Desktop (Mac or Windows) or Docker Engine (Linux), running.
+Five minutes of your attention, then it runs by itself. Nothing is hosted; it all runs on your machine.
+
+**Step 1. Install Docker (once).** You need Docker Desktop on Mac or Windows, or Docker Engine with the
+compose plugin on Linux. Open Docker Desktop and wait until it says the engine is running. Check from a
+terminal: `docker compose version` prints a version number.
+
+**Step 2. Get the code and start it.** In a terminal (Mac: Terminal; Windows: PowerShell, or a WSL
+Ubuntu terminal if you have one; Linux: any shell):
 
 ```bash
 git clone https://github.com/ayushfalor/percolatte-bid.git
@@ -16,24 +23,42 @@ cd percolatte-bid
 docker compose up --build
 ```
 
-Open **http://localhost:3000**. The first build downloads Postgres and the Python packages, which
-takes five to fifteen minutes depending on your connection; later starts take seconds. The three
-sample files (bid model, tender PDF, auction history) load by themselves, the agents run by
-themselves, and within a couple of minutes the Bid Brief shows the three numbers. Upload your own
-bid model on the Setup screen and it is read, audited and priced the same way; the header lets you
-switch between models.
+No `.env` file, no API key, no other install. Leave that terminal open; it shows the logs.
 
-This is built to run on your machine. Nothing is hosted anywhere; the optional server setup
-further down is there if you ever want it, not something the evaluation needs.
+**Step 3. Wait for the first build.** The first run downloads Postgres and the Python packages and builds
+the UI: five to fifteen minutes depending on your connection. You will see lines like
+`api-1 | Uvicorn running on http://0.0.0.0:8000` and `worker-1 | ...`. Later starts take seconds.
 
-No `.env` file and no API key are needed. Without a key the app runs in **offline mode**:
-everything deterministic works fully and AI steps use cached results for the sample files.
-To turn on live AI (the Copilot answers free-form questions, tender extraction gets a model pass), the
-demo key ships encrypted in `deploy/env.enc`; the passphrase comes with the submission note:
-`make env PHRASE=<that phrase>` writes `.env`, then `docker compose up -d`. Or `cp .env.example .env` and
-set `ANTHROPIC_API_KEY` to your own. The plain key is never in the repo; `.env` is ignored.
+**Step 4. Open the app.** Go to **http://localhost:3000** in a browser. It opens on the Setup screen.
+The three sample files (a bid model, the tender PDF, the auction history) are already loaded as the
+sample project, and the four agents start by themselves. Watch the four ticks (Read, Audited, Rivals,
+Priced) fill in; it takes one to three minutes.
 
-Stop with `Ctrl+C` (or `docker compose down`). Wipe the database with `docker compose down -v`.
+**Step 5. Use it.** When the header says "Priced and ready":
+
+1. **Bid Brief**: the three numbers (entry bid, target range, walk-away) and why.
+2. **War Room**: win chance against return at every price. Pick an input, type a value, press
+   "Price it" to see the numbers move.
+3. **Live Auction**: on auction day, type in what the portal shows and get hold, cut or walk away.
+4. **Setup, Upload a file**: drop in your own bid model (.xlsx); it is read, audited and priced the same
+   way, and the Project picker in the header switches between models.
+5. **Ask the Copilot** (top right): "What if CUF is 30%?", "Should we bid at 2.40?", "What is wrong
+   with the model?"
+
+**Live AI is optional.** Everything above works with no key. To turn it on, go to Setup, the "Live AI"
+box, and paste either your own Anthropic key or the passphrase from the submission note. The
+passphrase unlocks the demo key that ships encrypted in `deploy/env.enc`; the key is checked once and
+kept only in the app's local database, which publishes no port. No terminal step. (The old way still
+works: `make env PHRASE=<phrase>` writes `.env`, or `cp .env.example .env` and set
+`ANTHROPIC_API_KEY`.) The plain key is never in the repo; `.env` is ignored.
+
+**Stop and reset.** `Ctrl+C` in that terminal stops it; `docker compose down` from another terminal
+does the same. `docker compose down -v` also wipes the database, so the next start is a fresh one.
+To run it in the background instead: `docker compose up --build -d`, then `docker compose logs -f`
+to watch, `docker compose down` to stop.
+
+**If anything looks wrong**, the table under [Troubleshooting](#troubleshooting) covers every case
+we have met.
 
 ## Check it works
 
@@ -48,6 +73,8 @@ Stop with `Ctrl+C` (or `docker compose down`). Wipe the database with `docker co
 | Which inputs move the breakeven most | `GET /api/workbooks/{id}/drivers` |
 | The Bid Brief: three numbers, bridge, must-dos, from stored runs | `GET /api/brief/{id}` |
 | Ask a what-if; a scenario and an engine rerun come back | `POST /api/chat {"message": "What if CUF is 30%?"}` |
+| The live auction: type in the board, get the next move | `POST /api/live/{id} {"observations": [{"minute": 5, "bidder": "L1", "tariff": 2.41}], "our_price": 2.45, "minutes_left": 20}` |
+| The tender in plain words, with what each unusual clause means | `GET /api/tender/plain` |
 
 ## Try your own files
 
@@ -65,6 +92,8 @@ Stop with `Ctrl+C` (or `docker compose down`). Wipe the database with `docker co
 | `POST /api/auction/shortlist` | RfS §40.2: eligible capacity and H1 elimination from first-round bids |
 | `POST /api/auction/allocate` | RfS §41: zones, L1 + 2% band and bucket filling from e-RA bids |
 | `POST /api/runs`, `GET /api/runs/{id}` | queue an agent run, poll progress and result |
+| `POST /api/scenarios`, `POST /api/scenarios/{id}/run` | save an input change and price it; the War Room shows the result |
+| `GET/POST/DELETE /api/settings/llm` | live AI on or off: a key or the demo passphrase, checked before it is saved |
 
 - Command line, no database needed:
   `docker compose run --rm api python -m app.cli goal-seek data/samples/bid_model.xlsx --variable Tariff --target 'Returns!C8' --value 0.14`
@@ -88,9 +117,17 @@ browser ──> web (nginx + React) ──> api (FastAPI) ──> db (Postgres 1
 | Engine | Win odds and profit at every price point, and how they move with inputs | built (price ladder, three numbers, replay) |
 | Copilot | Chat: what-ifs become scenarios, the engine reruns | built (rule-based offline, every number grounded) |
 
-**Database: three tables.** `documents` (files, bytes stored in the row), `runs` (every agent
-execution: job queue, live progress and audit log; a finished run is never modified, which is what
-makes a rival snapshot frozen), `scenarios` (named what-ifs). Agent outputs are JSONB, so no table per agent.
+**Database: three working tables plus settings.** `documents` (files, bytes stored in the row), `runs`
+(every agent execution: job queue, live progress and audit log; a finished run is never modified, which
+is what makes a rival snapshot frozen), `scenarios` (named what-ifs), and `settings` (the key pasted on
+the Setup screen, D-012). Agent outputs are JSONB, so no table per agent.
+
+**Screens, in the order a new user meets them.** *Setup*: load files, watch four ticks, turn on live AI.
+*Bid Brief*: the three numbers and why. *War Room*: win chance against return at every price; change any
+input and price it. *Live Auction*: on the day, type in what the portal shows (our price, rank, the lowest
+price, the clock, any rival you can place) and get hold, cut to a price, or walk away. *Audit*, *Tender*
+(in plain words), *Rivals*. The header names the project: plant type read from the model's own labels,
+tender, our MW, the file, and where it is in the pipeline.
 
 **Async:** the API writes a `queued` run; the worker claims it with `FOR UPDATE SKIP LOCKED`,
 reports progress as it goes and stores the result. Scale workers with `docker compose up --scale worker=3`.
@@ -149,8 +186,20 @@ and in GitHub secrets, never in the repo. Backups, restore and the VM steps are 
 
 ## Troubleshooting
 
-See [docs/RUNBOOK.md](docs/RUNBOOK.md). Most common: a port is busy (set `WEB_PORT`/`API_PORT` in `.env`),
-or Docker Desktop is not running.
+| What you see | What it means | What to do |
+|---|---|---|
+| `docker: command not found` or `Cannot connect to the Docker daemon` | Docker is not installed, or Docker Desktop is not running | Install Docker Desktop, open it, wait for "Engine running", try again |
+| `Bind for 0.0.0.0:3000 failed: port is already allocated` (or 8000) | Another program uses that port | Create a file named `.env` next to `docker-compose.yml` with `WEB_PORT=3001` (and/or `API_PORT=8001`), run `docker compose up --build` again, open http://localhost:3001 |
+| The build stops with a network error while downloading | A flaky connection during the first build | Run `docker compose up --build` again; it continues from where it stopped |
+| The browser says "This site can't be reached" | The build is still running, or the stack is down | Wait for `Uvicorn running` in the logs; or run `docker compose ps` and check `api`, `web`, `db`, `worker` are "running" |
+| The page shows "Can't reach the app's API" | The web container is up but the API is not | `docker compose logs api` shows the error; `docker compose down -v` then `up --build` gives a clean start |
+| The four ticks never fill in | The worker is not running, or a run failed | `docker compose logs worker`; on Setup open "Details for engineers" to see which run failed and its message |
+| "Priced and ready" but the Brief shows n/a | The Engine ran before the rivals on an older database | On Setup press "Run again" |
+| Live AI says "Anthropic rejected this key" | The key or passphrase is wrong or revoked | Check it is pasted whole; passphrases are case-sensitive; ask the sender for a fresh one |
+| Everything is very slow on Windows | The repo lives under `C:\` and Docker goes through a file-system bridge | Clone inside WSL (for example `~/code`) and run from there |
+| You changed code and nothing changed | The old image is running | `docker compose up --build` rebuilds what changed |
+
+More detail, including backups and the optional server setup, in [docs/RUNBOOK.md](docs/RUNBOOK.md).
 
 ## What we built and why, what we left out, where it breaks
 
@@ -180,7 +229,8 @@ seen, and they run on every push.
 | **Switching fixes on and off** on the Audit screen | Some fixes change formulas, not just numbers, so a simple toggle cannot apply them, and we never let the screen do its own arithmetic. | Use the bridge on the Bid Brief: it shows what each fix is worth, one line at a time. |
 | **A "connectivity by date" must-do** | No clause in the tender gives that date. We would rather show four must-dos we can prove than five with one guessed. | Check the connectivity deadline against the RfS yourself. |
 | **Reading scanned PDFs** | This tender has a proper text layer, and OCR would add a heavy dependency for a case we did not have. | A scanned tender will be read as empty pages and say so. |
-| **A database migration tool** | There are three tables, created automatically on start. A migration framework would be more machinery than the problem needs. | If the table layout changes, `make reset` rebuilds the database. |
+| **A database migration tool** | There are four small tables, created automatically on start. A migration framework would be more machinery than the problem needs. | If the table layout changes, `make reset` rebuilds the database. |
+| **A live feed from the auction portal** | SECI's portal has no data feed; it shows each bidder its own price, its rank, the lowest price and the clock. So the Live Auction screen takes those by typing, which is how a bid manager reads them off the portal anyway. | During the auction one person types the board as it moves; the advice updates within a second. |
 | **A hosted version** | It is built to run on your own machine, which is how it is evaluated. The server setup is included and tested for shape, but nothing is deployed. | Run it locally; the optional deploy steps are there if you ever want them. |
 | **A model writing the answers** when there is no key | Reviewers run without a key, so the Copilot understands what-ifs and the common questions by rule. With a key it uses a model only for questions the rules cannot answer, and still checks every number. | Without a key the Copilot is precise but literal; with one it is more conversational, never less honest. |
 

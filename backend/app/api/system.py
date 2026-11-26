@@ -10,11 +10,11 @@ from sqlalchemy import func, select, text
 
 from .. import __version__
 from ..agents import REGISTRY
-from ..config import get_settings
 from ..core import auction_rules as rules
 from ..core.excel_engine import get_engine
 from ..db import SessionLocal, engine
 from ..files import materialize
+from ..keys import key_source, llm_mode
 from ..models import Document, Run
 
 router = APIRouter(tags=["system"])
@@ -22,13 +22,19 @@ router = APIRouter(tags=["system"])
 
 @router.get("/health")
 def health():
-    settings = get_settings()
     try:
         with engine.connect() as conn:
             conn.execute(text("SELECT 1"))
         with SessionLocal() as s:
             counts = dict(s.execute(select(Run.status, func.count()).group_by(Run.status)).all())
-        return {"status": "ok", "version": __version__, "database": "ok", "llm_mode": settings.llm_mode, "runs": counts}
+        return {
+            "status": "ok",
+            "version": __version__,
+            "database": "ok",
+            "llm_mode": llm_mode(),
+            "llm_source": key_source(),
+            "runs": counts,
+        }
     except Exception as exc:
         return JSONResponse(status_code=503, content={"status": "error", "database": str(exc)})
 

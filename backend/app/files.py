@@ -11,6 +11,9 @@ from openpyxl import load_workbook
 from .config import get_settings
 
 ALLOWED = {".xlsx": "excel", ".xlsm": "excel", ".pdf": "pdf"}
+SOLAR_WORDS = ("solar", "module", "irradia", "inverter", "/wp", "wp)", "ghi", "dc capacity", "pv ")
+WIND_WORDS = ("wind", "turbine", "wtg", "hub height", "rotor")
+MAX_TEXT_CELLS = 4000  # enough to see every label; the whole sheet would be slow on a big model
 
 
 def sha256(content: bytes) -> str:
@@ -46,3 +49,26 @@ def materialize(sha: str, ext: str, content: bytes | None = None) -> str:
         tmp.write_bytes(content)
         os.replace(tmp, path)
     return str(path)
+
+
+def detect_technology(path: str) -> str:
+    """solar, wind or renewable, from the words in the model's own labels. Never from the file name."""
+    wb = load_workbook(path, read_only=True)
+    seen, solar, wind = 0, 0, 0
+    for ws in wb.worksheets:
+        for row in ws.iter_rows(values_only=True):
+            for cell in row:
+                if not isinstance(cell, str):
+                    continue
+                text = cell.lower()
+                solar += sum(w in text for w in SOLAR_WORDS)
+                wind += sum(w in text for w in WIND_WORDS)
+                seen += 1
+                if seen >= MAX_TEXT_CELLS:
+                    break
+            if seen >= MAX_TEXT_CELLS:
+                break
+    wb.close()
+    if solar == wind:
+        return "renewable"
+    return "solar" if solar > wind else "wind"

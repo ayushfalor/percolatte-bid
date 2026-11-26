@@ -20,9 +20,9 @@ export function Brief({ workbook, docs }: { workbook: Doc; docs: Doc[] }) {
   return (
     <>
       <section className="cards" aria-label="The three numbers">
-        <Card title="Entry bid" value={inr(b.entry_bid)} note="Sealed envelope. Leaves room for the usual cut." />
-        <Card title="Target range" value={b.target_low == null ? "n/a" : `${inr(b.target_low)} to ${inr(b.target_high)}`} note="Where chance of winning times profit is highest." />
-        <Card title="Walk-away" value={inr(b.walk_away)} note={b.basis.length ? "On the corrected model with the levers below applied." : "Never go below this in the auction."} tone="red" />
+        <Card title="Entry bid" value={inr(b.entry_bid)} note="The price to write in the sealed bid. Leaves room to cut in the auction." />
+        <Card title="Target range" value={b.target_low == null ? "n/a" : `${inr(b.target_low)} to ${inr(b.target_high)}`} note="Aim to finish here: the best balance of winning and profit." />
+        <Card title="Walk-away" value={inr(b.walk_away)} note={b.basis.length ? "Never go under this in the auction. Computed on the corrected model." : "Never go under this in the auction."} tone="red" />
       </section>
       {b.basis.length > 0 && <p className="note">Floor computed on: {b.basis.join("; ")}.</p>}
       {b.reasons.length > 0 && <ul className="reasons">{b.reasons.map((r) => <li key={r}>{r}</li>)}</ul>}
@@ -36,15 +36,15 @@ export function Brief({ workbook, docs }: { workbook: Doc; docs: Doc[] }) {
       )}
 
       <section>
-        <h2>The bridge</h2>
-        <p className="note">From the model as received to the corrected breakeven. Each step is one fix the Auditor is sure about, priced by applying it.</p>
+        <h2>From the model as uploaded to the corrected price</h2>
+        <p className="note">The first line is the price the model needs as uploaded. Each step is one error the Auditor is sure about, and what fixing it does to that price.</p>
         <table>
           <tbody>
-            <tr><td>Model as received</td><td className="num">{inr(b.as_received, 4)}</td><td /></tr>
+            <tr><td>Price the model needs, as uploaded</td><td className="num">{inr(b.as_received, 4)}</td><td /></tr>
             {sure.map((s) => (
               <tr key={s.label}><td>{s.label}{s.where && <span className="note"> · {s.where}</span>}</td><td className="num">{paise(s.delta)}</td><td className="num">{inr(s.after, 4)}</td></tr>
             ))}
-            <tr className="total"><td>Corrected breakeven</td><td /><td className="num">{inr(b.corrected, 4)}</td></tr>
+            <tr className="total"><td>Price the model needs, corrected</td><td /><td className="num">{inr(b.corrected, 4)}</td></tr>
             {levers.map((s) => (
               <tr key={s.label} className="lever"><td>Lever, not in the total: {s.label}</td><td className="num">{paise(s.delta)}</td><td className="num">{inr(s.after, 4)}</td></tr>
             ))}
@@ -53,30 +53,30 @@ export function Brief({ workbook, docs }: { workbook: Doc; docs: Doc[] }) {
       </section>
 
       <section>
-        <h2>Depends most on</h2>
+        <h2>What moves the price most</h2>
         <p className="chips">
           {b.depends_most_on.map((d) => (
             <span key={d.cell} className="chip" title={`${d.cell}: ${inr(d.low)} to ${inr(d.high)}`}>{d.label} <b>{inr(d.swing)}</b></span>
           ))}
-          {b.depends_most_on.length === 0 && <span className="note">Run the Auditor to rank the inputs.</span>}
+          {b.depends_most_on.length === 0 && <span className="note">The Auditor ranks the inputs once it has run.</span>}
         </p>
       </section>
 
       <section>
-        <h2>Must-dos</h2>
+        <h2>Money and paperwork to have ready</h2>
         <table>
           <thead><tr><th>Item</th><th className="num">Amount</th><th>Basis</th></tr></thead>
           <tbody>
             {Object.entries(b.must_dos).map(([k, m]) => (
               <tr key={k}><td>{MUST_DO_NAMES[k] ?? k}</td><td className="num">₹{m.cr.toFixed(1)} Cr</td><td className="what">₹{m.per_mw_inr.toLocaleString("en-IN")}/MW on {m.our_mw} MW, clause {m.clause}, page {m.pdf_page}</td></tr>
             ))}
-            {Object.keys(b.must_dos).length === 0 && <tr><td colSpan={3} className="note">No tender facts yet. The Reader fills these from the RfS.</td></tr>}
+            {Object.keys(b.must_dos).length === 0 && <tr><td colSpan={3} className="note">Filled in from the tender once the Reader has read it.</td></tr>}
           </tbody>
         </table>
       </section>
 
       <p className="note">
-        Sources: {Object.entries(b.sources).map(([k, v]) => `${k} run ${v.slice(0, 8)}`).join(", ") || "none yet"}
+        Where this came from: {Object.entries(b.sources).map(([k, v]) => `${k} run ${v.slice(0, 8)}`).join(", ") || "none yet"}
         {b.snapshot_id && ` · rival snapshot ${b.snapshot_id}`}
       </p>
     </>

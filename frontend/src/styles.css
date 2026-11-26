@@ -142,3 +142,37 @@ blockquote { margin: 8px 0 0; padding-left: 12px; border-left: 3px solid var(--r
 
 .picker { display: inline-grid; gap: 2px; font-size: 0.85rem; margin-left: auto; }
 .picker select { padding: 4px 8px; }
+
+/* Phase 7: a new-user front door, a project line, the live auction and plainer screens */
+.hint { color: var(--muted); margin: -6px 0 18px; max-width: 70ch; }
+.project { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; margin-top: 14px; font-size: 0.95rem; color: var(--muted); }
+.project b { color: var(--ink); }
+.project .dot { margin-top: 0; }
+.project-status { margin-left: auto; font-weight: 600; color: var(--ink); }
+.steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+.step { border: 1px solid var(--rule); padding: 16px 18px; }
+.step h2 { display: flex; gap: 10px; align-items: center; }
+.step p { margin: 0 0 10px; }
+.step-no { display: inline-grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; background: var(--ink); color: var(--paper); font-size: 0.95rem; }
+.ticks { list-style: none; padding: 0; margin: 8px 0; display: grid; gap: 4px; font-weight: 600; }
+.tick-done { color: var(--green); } .tick-busy { color: var(--orange); } .tick-failed { color: var(--red); } .tick-todo { color: var(--muted); }
+a.button { display: inline-block; padding: 8px 16px; background: var(--blue); color: #fff; border-radius: 3px; text-decoration: none; font-weight: 600; }
+.ai-box { border-left: 4px solid var(--blue); padding-left: 20px; }
+.ai-box p { max-width: 70ch; }
+.engineer { margin-top: 44px; }
+.engineer summary { cursor: pointer; color: var(--muted); font-weight: 600; margin-bottom: 12px; }
+.help { color: var(--muted); font-size: 0.9rem; max-width: 80ch; margin: 8px 0 0; }
+.board { display: flex; gap: 16px; align-items: flex-end; flex-wrap: wrap; margin-bottom: 12px; }
+.board select { font: inherit; padding: 8px 10px; }
+label.check { display: flex; align-items: center; gap: 8px; padding-bottom: 10px; }
+.card-orange { border-top-color: var(--orange); } .card-green { border-top-color: var(--green); }
+.plain-item { border-bottom: 1px solid var(--rule); padding: 10px 0; }
+.plain-item h3 { margin: 0 0 4px; font-size: 1.05rem; }
+.plain-item p { margin: 0; max-width: 80ch; }
+.meaning h3 { margin: 0 0 6px; font-size: 1.05rem; }
+.meaning p { margin: 4px 0; }
+.meaning blockquote { margin: 8px 0 0; color: var(--muted); font-size: 0.9rem; border-left: 3px solid var(--rule); padding-left: 10px; }
+.meaning summary { cursor: pointer; }
+.compare td b { font-weight: 600; }
+tr.warn td { color: var(--red); }
+@media (max-width: 900px) { .steps { grid-template-columns: 1fr; } .project-status { margin-left: 0; } }

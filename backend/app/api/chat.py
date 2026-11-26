@@ -11,34 +11,19 @@ import uuid
 from typing import Any
 
 from fastapi import APIRouter, HTTPException
-from sqlalchemy import select
 
 from ..agents import copilot
 from ..core.brief import bridge_steps, must_dos
-from ..core.contracts import Finding, Fix, RivalProfile, RivalSnapshot
+from ..core.contracts import Finding, Fix
 from ..core.simulate import replay
 from ..db import SessionLocal
 from ..files import materialize
 from ..models import Document, Run, Scenario
 from ..schemas import BriefOut, ChatIn, ChatOut
-from .deps import latest_run, latest_tender_facts, load_document
+from .deps import latest_run, latest_snapshot, latest_tender_facts, workbook_document
 
 router = APIRouter(prefix="/api", tags=["copilot"])
 TOP_DRIVERS = 3
-
-
-def _workbook(document_id: uuid.UUID | None) -> Document:
-    if document_id is not None:
-        doc = load_document(document_id)
-        if doc.kind != "workbook":
-            raise HTTPException(400, f"Document {document_id} is a {doc.kind}, not a bid model")
-        return doc
-    with SessionLocal() as s:
-        doc = s.scalars(select(Document).where(Document.kind == "workbook").order_by(Document.created_at)).first()
-        if doc is None:
-            raise HTTPException(404, "No bid model uploaded yet")
-        _ = doc.content
-        return doc
 
 
 def _path(doc: Document) -> str:
@@ -49,7 +34,7 @@ def _path(doc: Document) -> str:
 @router.post("/chat", response_model=ChatOut)
 def chat(body: ChatIn):
     """Ask a question or a what-if. A what-if becomes a scenario and an engine rerun."""
-    doc = _workbook(body.document_id)
+    doc = workbook_document(body.document_id)
     path = _path(doc)
     stored = copilot.Stored(
         (latest_run("engine", doc.id) or {}).get("result"),
@@ -103,12 +88,10 @@ def replay_auction(
     document_id: uuid.UUID, draw: int = 0, open: float = 2.45, floor: float = 2.28, regime: str = "almm_40"
 ):
     """One simulated e-RA, minute by minute, from the latest rival snapshot. For the war room."""
-    doc = _workbook(document_id)
-    rival = latest_run("rival")
-    stored = ((rival or {}).get("result") or {}).get("snapshots", {}).get(regime)
-    if not stored:
+    doc = workbook_document(document_id)
+    snapshot = latest_snapshot(regime)
+    if snapshot is None:
         raise HTTPException(409, "No rival run yet; run the Rival model first")
-    snapshot = RivalSnapshot(**{**stored, "profiles": [RivalProfile(**p) for p in stored["profiles"]]})
     our_mw = float(((latest_run("engine", doc.id) or {}).get("result") or {}).get("our_mw", 200))
     return {"snapshot_id": snapshot.id, "draw": draw, "events": replay(snapshot, draw, open, floor, our_mw)}
 
@@ -128,7 +111,7 @@ def _finding(row: dict[str, Any]) -> Finding:
 @router.get("/brief/{document_id}", response_model=BriefOut)
 def brief(document_id: uuid.UUID):
     """The Bid Brief: three numbers, the bridge, what it depends on, the must-dos. Stored runs only."""
-    doc = _workbook(document_id)
+    doc = workbook_document(document_id)
     auditor = latest_run("auditor", doc.id)
     engine = latest_run("engine", doc.id)
     rival = latest_run("rival")

@@ -25,6 +25,7 @@ from pathlib import Path
 from typing import Any
 
 from ..config import get_settings
+from ..keys import api_key, llm_mode
 from .contracts import TenderFact
 from .tender_reader import quote_on_page, read_pages
 
@@ -224,7 +225,7 @@ def _llm_facts(path: str, pages: list[dict[str, Any]]) -> list[TenderFact]:
     import anthropic
 
     settings = get_settings()
-    client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
+    client = anthropic.Anthropic(api_key=api_key())
     response = client.messages.create(
         model=settings.llm_model_smart,
         max_tokens=4000,
@@ -279,7 +280,7 @@ def extract_facts(path: str, mode: str = "auto") -> list[TenderFact]:
     by_rule = _apply_rules(pages, RULES)
     if mode == "rule":
         return by_rule
-    live = get_settings().llm_mode == "live"
+    live = llm_mode() == "live"
     if mode == "live" and not live:
         raise RuntimeError("mode='live' needs ANTHROPIC_API_KEY")
     if not live:

@@ -23,6 +23,7 @@ from ..core.contracts import Fix
 from ..core.grounding import ungrounded_numbers
 from ..core.simulate import TARGET_SHARE, TYPICAL_CUT
 from ..core.whatif import WhatIf, asks_to_change_rivals, parse_what_if
+from ..keys import api_key, llm_mode
 from . import AgentContext, agent
 
 log = logging.getLogger(__name__)
@@ -203,7 +204,7 @@ def _llm_answer(message: str, stored: Stored) -> tuple[str, list[Any], float]:
     settings = get_settings()
     data = _data_for_model(stored)
     try:
-        client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
+        client = anthropic.Anthropic(api_key=api_key())
         response = client.messages.create(
             model=settings.llm_model_smart,
             max_tokens=MAX_ANSWER_TOKENS,
@@ -245,7 +246,7 @@ def answer(message: str, path: str, stored: Stored) -> dict[str, Any]:
         text, tools = _must_do_answer(stored)
     elif any(w in lower for w in ("wrong", "problem", "finding", "bug", "fix", "audit")):
         text, tools = _findings_answer(stored)
-    elif get_settings().llm_mode == "live":
+    elif llm_mode() == "live":
         text, tools, cost = _llm_answer(message, stored)
     else:
         text, tools = CANNOT_ANSWER, []

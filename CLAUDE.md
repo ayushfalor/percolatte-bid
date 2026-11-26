@@ -29,7 +29,7 @@ simulation, and a UI a non-technical bid manager can trust. They will run their 
 5. Finished runs are write-once. A rival snapshot never changes; new beliefs mean a new run.
 6. Every rule of the auction goes through `backend/app/core/auction_rules.py`.
 7. Offline mode must keep working (no API key): cache LLM outputs by file hash.
-8. Keep three tables. Agent outputs go in JSONB. A new table needs a decision log entry.
+8. Keep three working tables plus `settings` (D-012). Agent outputs go in JSONB. A new table needs a decision log entry.
 9. Fixed seeds for anything random. Same inputs, same outputs.
 10. Pin dependencies; after editing `backend/requirements.txt`, run `make lock`.
 11. Do not say a step is done until `make test` passes; a phase is not done until `make eval` passes

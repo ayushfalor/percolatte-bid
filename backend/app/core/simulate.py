@@ -52,12 +52,31 @@ def price_ladder(
     `seed` is accepted for symmetry with the snapshot; the draws are the snapshot's own.
     """
     arr = draws(snapshot)
-    part, mw, opens, floors = arr[:, :, 0], arr[:, :, 1], arr[:, :, 2], arr[:, :, 3]
+    return ladder_from_arrays(
+        arr[:, :, 0], arr[:, :, 1], arr[:, :, 2], arr[:, :, 3], economics, our_mw, tendered_mw, start, stop, step
+    )
+
+
+def ladder_from_arrays(
+    part,
+    mw,
+    opens,
+    floors,
+    economics: list[dict[str, Any]],
+    our_mw: float = 200,
+    tendered_mw: float = 700,
+    start: float = 2.00,
+    stop: float = 2.80,
+    step: float = 0.01,
+    sealed_stage: bool = True,
+) -> list[LadderPoint]:
+    """The ladder over any set of auctions, (draws, rivals) arrays: the snapshot's own, or the
+    ones that survive conditioning on a live board (core.live_auction)."""
     irr, dscr, npv = _curve(economics, "equity_irr"), _curve(economics, "min_dscr"), _curve(economics, "npv_cr")
     ladder: list[LadderPoint] = []
     for tariff in np.round(np.arange(start, stop + step / 2, step), 2):
         price = float(tariff)
-        settled = rules.settle_field(part, floors, mw, opens, price, our_mw, tendered_mw)
+        settled = rules.settle_field(part, floors, mw, opens, price, our_mw, tendered_mw, sealed_stage)
         win = settled["win_mw"]
         expected_mw = float(win.mean())
         value = npv(price) if npv else None
@@ -77,6 +96,11 @@ def price_ladder(
     return ladder
 
 
+def point_value(p: LadderPoint, walk_away: float) -> float:
+    """Expected value if the workbook gave one; else expected MW times the margin over the floor."""
+    return p.expected_value_cr if p.expected_value_cr is not None else p.expected_mw * (p.tariff - walk_away)
+
+
 def recommend(
     ladder: list[LadderPoint], hurdle_tariff: float, dscr_tariff: float | None = None, max_h1_risk: float = 0.05
 ) -> Recommendation:
@@ -94,8 +118,7 @@ def recommend(
         above = [top]
 
     def value(p: LadderPoint) -> float:
-        # Expected value if the workbook gave one; else expected MW times margin over the floor.
-        return p.expected_value_cr if p.expected_value_cr is not None else p.expected_mw * (p.tariff - walk_away)
+        return point_value(p, walk_away)
 
     best = max(value(p) for p in above)
     nothing_wins = best <= 0

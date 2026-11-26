@@ -16,6 +16,7 @@ function scale(domain: [number, number], range: [number, number]) {
 export function Ladder({
   ladder,
   ghost,
+  ghostLine = "irr",
   walkAway,
   entry,
   target,
@@ -24,6 +25,7 @@ export function Ladder({
 }: {
   ladder: LadderPoint[];
   ghost?: LadderPoint[] | null;
+  ghostLine?: "irr" | "odds";
   walkAway?: number | null;
   entry?: number | null;
   target?: [number, number] | null;
@@ -61,7 +63,9 @@ export function Ladder({
     >
       {target && <rect x={x(target[0])} y={PAD.t} width={Math.max(1, x(target[1]) - x(target[0]))} height={H - PAD.t - PAD.b} className="zone-target" />}
       {ladder.map((p) => (
-        <rect key={p.tariff} x={x(p.tariff) - barW / 2} y={yOdds(p.expected_mw / 200)} width={barW} height={H - PAD.b - yOdds(p.expected_mw / 200)} className="bar-mw" />
+        <rect key={p.tariff} x={x(p.tariff) - barW / 2} y={yOdds(p.expected_mw / 200)} width={barW} height={H - PAD.b - yOdds(p.expected_mw / 200)} className="bar-mw">
+          <title>{`${inr(p.tariff)}: ${pct(p.p_win_any)} chance of winning something, ${p.expected_mw.toFixed(0)} MW expected, return ${pct(p.equity_irr, 1)}`}</title>
+        </rect>
       ))}
       <line x1={PAD.l} x2={W - PAD.r} y1={yIrr(hurdle)} y2={yIrr(hurdle)} className="line-hurdle" />
       <text x={W - PAD.r + 4} y={yIrr(hurdle) + 4} className="axis-label">hurdle {pct(hurdle)}</text>
@@ -72,7 +76,8 @@ export function Ladder({
         </>
       )}
       {entry != null && <line x1={x(entry)} x2={x(entry)} y1={PAD.t} y2={H - PAD.b} className="line-entry" />}
-      {ghost && <path d={path(ghost, yIrr, (p) => p.equity_irr)} className="line-irr ghost" />}
+      {ghost && ghostLine === "irr" && <path d={path(ghost, yIrr, (p) => p.equity_irr)} className="line-irr ghost" />}
+      {ghost && ghostLine === "odds" && <path d={path(ghost, yOdds, (p) => p.p_win_any)} className="line-odds ghost" />}
       <path d={path(ladder, yIrr, (p) => p.equity_irr)} className="line-irr" />
       <path d={path(ladder, yOdds, (p) => p.p_win_any)} className="line-odds" />
       {hover && (
@@ -87,7 +92,7 @@ export function Ladder({
       {ladder.filter((_, i) => i % 10 === 0).map((p) => (
         <text key={p.tariff} x={x(p.tariff)} y={H - PAD.b + 18} className="axis-label middle">{p.tariff.toFixed(2)}</text>
       ))}
-      <text x={PAD.l} y={H - 4} className="axis-label">win chance (left), equity IRR (right), bars: expected MW of 200</text>
+      <text x={PAD.l} y={H - 4} className="axis-label">blue: chance of winning (left axis) · green: return (right axis) · bars: MW we expect to win · price along the bottom</text>
     </svg>
   );
 }
@@ -105,11 +110,13 @@ export function Tornado({ drivers, base }: { drivers: Driver[]; base: number | n
       {drivers.map((d, i) => (
         <g key={d.cell} transform={`translate(0 ${16 + i * rowH})`}>
           <text x={192} y={14} className="axis-label right">{d.label}</text>
-          <rect x={x(d.low)} y={2} width={Math.max(1, x(d.high) - x(d.low))} height={18} className={d.exact ? "bar-swing exact" : "bar-swing"} />
+          <rect x={x(d.low)} y={2} width={Math.max(1, x(d.high) - x(d.low))} height={18} className={d.exact ? "bar-swing exact" : "bar-swing"}>
+            <title>{`${d.label}: now ${d.value}. Moved 10% either way, the price the model needs lands between ${inr(d.low)} and ${inr(d.high)}.`}</title>
+          </rect>
           <text x={x(d.high) + 6} y={16} className="axis-label">{inr(d.low)} to {inr(d.high)}</text>
         </g>
       ))}
-      <text x={200} y={height - 8} className="axis-label">breakeven tariff with each input moved 10% either way; solid bars are exact goal seeks</text>
+      <text x={200} y={height - 8} className="axis-label">longer bar = that input matters more. Each input moved 10% either way; the red line is the price the model needs today</text>
     </svg>
   );
 }

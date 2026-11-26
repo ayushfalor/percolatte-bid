@@ -62,7 +62,12 @@ def test_async_engine_run(client):
     ).json()
     done = _wait(client, run["id"])
     assert done["status"] == "succeeded", done["error"]
-    assert abs(done["result"]["breakeven_tariff"] - 2.6039) < 5e-4
+    result = done["result"]
+    # The Engine prices the corrected model (certain fixes plus the ALMM lever, A-03) and keeps the
+    # raw model's floor for the bridge; the raw floor is the sample's 14% breakeven.
+    assert abs(result["as_received_breakeven"] - 2.6039) < 5e-4
+    assert result["applied_fixes"] >= 1 and result["applied_levers"] >= 1
+    assert result["breakeven_tariff"] < result["as_received_breakeven"] - 0.3
 
 
 def test_rejects_bad_input_cleanly(client):

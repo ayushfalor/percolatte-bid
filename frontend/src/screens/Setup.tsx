@@ -1,10 +1,12 @@
 import { useRef, useState } from "react";
-import { type Agent, type Doc, type Health, type Run, api } from "../api";
+import { type Agent, type Doc, type Health, type LlmSetting, type Run, api } from "../api";
 import { useLive } from "../hooks";
+import type { Progress } from "../status";
 
 type Light = "ok" | "busy" | "down" | "off";
 const kindName: Record<string, string> = { workbook: "Bid model", tender: "Tender (RfS)", history: "Auction history" };
 const fmtSize = (n: number) => (n > 1_000_000 ? `${(n / 1_000_000).toFixed(1)} MB` : `${Math.round(n / 1000)} KB`);
+const MARK: Record<string, string> = { done: "✓", busy: "…", failed: "✕", todo: "○" };
 
 function summarize(run: Run): string {
   if (run.status === "failed") return (run.error ?? "Failed").split("\n")[0];
@@ -29,6 +31,7 @@ export function Setup({
   workbook,
   agents,
   runs,
+  progress,
   onUploaded,
 }: {
   health: Health | null;
@@ -36,11 +39,12 @@ export function Setup({
   workbook: Doc | undefined;
   agents: Agent[];
   runs: Run[];
+  progress: Progress;
   onUploaded: (id: string) => void;
 }) {
   const fileInput = useRef<HTMLInputElement>(null);
   const [note, setNote] = useState<string | null>(null);
-  const runsLive = useLive(() => api.runs("limit=40"), 1500);
+  const runsLive = useLive(() => api.runs("limit=60"), 1500);
   const list = runsLive.data ?? runs;
   const pending = list.filter((r) => r.status === "queued" || r.status === "running").length;
   const apiLight: Light = health ? "ok" : "busy";
@@ -50,7 +54,7 @@ export function Setup({
     setNote(`Uploading ${file.name}`);
     try {
       const res = await api.upload(file);
-      setNote(res.created ? `${file.name} added. It is being read, audited and priced; the Bid Brief fills in as runs finish.` : `${file.name} was already loaded.`);
+      setNote(res.created ? `${file.name} added. It is being read, checked and priced; the ticks fill in as each step finishes.` : `${file.name} was already loaded.`);
       if (res.document?.id) onUploaded(res.document.id);
     } catch (e) {
       setNote((e as Error).message);
@@ -68,28 +72,51 @@ export function Setup({
   return (
     <>
       <section className="strip" aria-label="System status">
-        <Status light={apiLight} title="API" detail={health ? `Running v${health.version}` : "Checking"} />
+        <Status light={apiLight} title="App" detail={health ? `Running v${health.version}` : "Starting"} />
         <Status light={health?.database === "ok" ? "ok" : "busy"} title="Database" detail={health?.database === "ok" ? "Connected" : "Waiting"} />
-        <Status light={pending ? "busy" : "ok"} title="Worker" detail={pending ? `${pending} job${pending > 1 ? "s" : ""} in progress` : "Idle, queue empty"} />
-        <Status light={health?.llm_mode === "live" ? "ok" : "off"} title="AI" detail={health?.llm_mode === "live" ? "Live (API key set)" : "Offline: rules and cache"} />
+        <Status light={pending ? "busy" : "ok"} title="Agents" detail={pending ? `${pending} job${pending > 1 ? "s" : ""} running` : "Idle"} />
+        <Status light={health?.llm_mode === "live" ? "ok" : "off"} title="Live AI" detail={health?.llm_mode === "live" ? "On" : "Off: rules and cached answers"} />
       </section>
-      <section>
-        <div className="section-head">
-          <h2>Files</h2>
-          <button className="ghost" onClick={() => fileInput.current?.click()}>Upload a file</button>
-          <button onClick={runAll}>Run the agents again</button>
-          <input ref={fileInput} type="file" accept=".xlsx,.xlsm,.pdf" hidden onChange={(e) => e.target.files?.[0] && upload(e.target.files[0])} />
+
+      <section className="steps">
+        <div className="step">
+          <h2><span className="step-no">1</span> Load your files</h2>
+          <p>A bid model (.xlsx), the tender (.pdf) and the auction history (.xlsx). A sample project is loaded so you can look around first; upload your own model and it becomes the project.</p>
+          <p className="levers">
+            <button onClick={() => fileInput.current?.click()}>Upload a file</button>
+            <input ref={fileInput} type="file" accept=".xlsx,.xlsm,.pdf" hidden onChange={(e) => e.target.files?.[0] && upload(e.target.files[0])} />
+          </p>
+          {note && <p className="note">{note}</p>}
+          <table>
+            <thead><tr><th>File</th><th>What it is</th><th className="num">Size</th></tr></thead>
+            <tbody>
+              {docs.map((d) => <tr key={d.id}><td>{d.filename}{d.meta?.sample ? <span className="tag">sample</span> : null}</td><td>{kindName[d.kind] ?? d.kind}</td><td className="num">{fmtSize(d.size_bytes)}</td></tr>)}
+            </tbody>
+          </table>
         </div>
-        {note && <p className="note">{note}</p>}
-        <table>
-          <thead><tr><th>File</th><th>Type</th><th className="num">Size</th></tr></thead>
-          <tbody>
-            {docs.map((d) => <tr key={d.id}><td>{d.filename}</td><td>{kindName[d.kind] ?? d.kind}</td><td className="num">{fmtSize(d.size_bytes)}</td></tr>)}
-          </tbody>
-        </table>
+
+        <div className="step">
+          <h2><span className="step-no">2</span> Let the agents work</h2>
+          <p>Four steps run by themselves: the model is read, checked for errors, the rivals are modelled from history, then every price is tested.{workbook ? ` Now: ${progress.status.toLowerCase()}.` : ""}</p>
+          <ol className="ticks">
+            {progress.steps.map((s) => (
+              <li key={s.key} className={`tick tick-${s.state}`} title={s.detail}>{MARK[s.state]} {s.title}</li>
+            ))}
+          </ol>
+          <p className="levers"><button className="ghost" onClick={runAll} title="Queue the Auditor, the Rival model and the Engine again for the current model">Run again</button></p>
+        </div>
+
+        <div className="step">
+          <h2><span className="step-no">3</span> Read the Brief</h2>
+          <p>Three numbers: the sealed bid, where to aim to finish, and the price never to go under. Then the War Room to see how they move, and the Live Auction on the day.</p>
+          <p className="levers"><a className="button" href="#/brief">Open the Bid Brief</a></p>
+        </div>
       </section>
-      <section>
-        <h2>Timeline</h2>
+
+      <LiveAi health={health} />
+
+      <details className="engineer">
+        <summary>Details for engineers: every run and every agent</summary>
         <table>
           <thead><tr><th>Agent</th><th>Status</th><th>What happened</th><th className="num">Time</th><th className="num">Cost</th></tr></thead>
           <tbody>
@@ -104,16 +131,69 @@ export function Setup({
             ))}
           </tbody>
         </table>
-      </section>
-      <section>
-        <h2>Agents</h2>
         <ul className="agents">
           {agents.map((a) => (
             <li key={a.kind} className={a.built ? "" : "agent-todo"}><strong>{a.title}</strong> {a.job}{!a.built && <span className="tag">Not built</span>}</li>
           ))}
         </ul>
-      </section>
+      </details>
     </>
+  );
+}
+
+function LiveAi({ health }: { health: Health | null }) {
+  const setting = useLive(() => api.llmSetting(), 5000);
+  const [secret, setSecret] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState<string | null>(null);
+  const s: LlmSetting | null = setting.data;
+  const live = (s?.mode ?? health?.llm_mode) === "live";
+
+  async function turnOn() {
+    setBusy(true);
+    setNote("Checking the key with Anthropic.");
+    try {
+      await api.setLlm(secret);
+      setSecret("");
+      setNote("Live AI is on. The Copilot now answers free-form questions; new tenders get a model pass.");
+      setting.refresh();
+    } catch (e) {
+      setNote((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function turnOff() {
+    await api.clearLlm();
+    setNote("Key forgotten. Back to rules and cached answers.");
+    setting.refresh();
+  }
+
+  return (
+    <section className="ai-box">
+      <h2>Live AI, optional</h2>
+      {live ? (
+        <>
+          <p>On{s?.source === "env" ? ", from the .env file" : s?.source === "saved" ? ", key saved in this app" : ""}. Model: {s?.model}. The Copilot answers questions the rules cannot, and every number it writes is still checked against the tools.</p>
+          {s?.source === "saved" && <p className="levers"><button className="ghost" onClick={turnOff}>Turn off and forget the key</button></p>}
+        </>
+      ) : (
+        <>
+          <p>Everything works without it. To turn it on, paste your own Anthropic key{s?.unlockable ? ", or the passphrase that came with the submission note" : ""}. It is checked once, then kept only in this app’s local database, never in the repo.</p>
+          <form
+            className="levers"
+            onSubmit={(e) => {
+              e.preventDefault();
+              turnOn();
+            }}
+          >
+            <input type="password" value={secret} onChange={(e) => setSecret(e.target.value)} placeholder={s?.unlockable ? "passphrase or key" : "Anthropic key"} aria-label="Anthropic key or passphrase" style={{ width: "22em" }} />
+            <button disabled={busy || !secret.trim()}>{busy ? "Checking" : "Turn on live AI"}</button>
+          </form>
+        </>
+      )}
+      {note && <p className="note">{note}</p>}
+    </section>
   );
 }
 

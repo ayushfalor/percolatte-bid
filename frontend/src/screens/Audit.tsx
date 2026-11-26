@@ -13,14 +13,14 @@ export function Audit({ workbook }: { workbook: Doc }) {
   return (
     <>
       <section className="cards">
-        <div className="card"><div className="card-title">As received</div><div className="card-value">{inr(result.breakeven_as_received, 4)}</div><div className="note">14% breakeven from the model as uploaded</div></div>
-        <div className="card"><div className="card-title">Corrected</div><div className="card-value">{inr(result.corrected_breakeven, 4)}</div><div className="note">every certain fix applied, on a copy</div></div>
+        <div className="card"><div className="card-title">As received</div><div className="card-value">{inr(result.breakeven_as_received, 4)}</div><div className="note">price the model needs to earn 14%, as uploaded</div></div>
+        <div className="card"><div className="card-title">Corrected</div><div className="card-value">{inr(result.corrected_breakeven, 4)}</div><div className="note">the same price with every certain error fixed, on a copy</div></div>
         <div className="card"><div className="card-title">Findings</div><div className="card-value">{result.findings.length}</div><div className="note">{result.tender_facts_used} tender facts used</div></div>
       </section>
       <section>
-        <h2>What is wrong, by what it is worth</h2>
+        <h2>What is wrong, biggest first</h2>
         <table>
-          <thead><tr><th>Severity</th><th>Finding</th><th className="num">Worth</th><th>Fix</th></tr></thead>
+          <thead><tr><th>Severity</th><th>Finding</th><th className="num">Effect on price</th><th>Fix</th></tr></thead>
           <tbody>
             {byImpact.map((f) => (
               <tr key={`${f.id}:${f.where}`}>
@@ -39,7 +39,8 @@ export function Audit({ workbook }: { workbook: Doc }) {
         </table>
       </section>
       <section>
-        <h2>What moves the breakeven</h2>
+        <h2>Which inputs matter most</h2>
+        <p className="help">Each bar moves one input 10% either way and shows where the price the model needs ends up. Hover a bar for the numbers.</p>
         <Tornado drivers={result.drivers} base={result.breakeven_as_received} />
       </section>
     </>

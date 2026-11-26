@@ -95,6 +95,7 @@ def run(ctx: AgentContext) -> dict[str, Any]:
         "irr_cell": eng.normalize_ref(irr_cell),
         "dscr_cell": eng.normalize_ref(dscr_cell) if dscr_cell else None,
         "hurdle": hurdle,
+        "our_mw": float(ctx.params.get("our_mw", 200)),
         "breakeven_tariff": seek.value,
         "as_received_breakeven": raw.value,
         "dscr_tariff": dscr_seek.value if dscr_seek and dscr_seek.converged else None,

@@ -3,7 +3,7 @@
 
 export type Health = { status: string; version: string; database: string; llm_mode: string; runs: Record<string, number> };
 export type Agent = { kind: string; title: string; job: string; built: boolean };
-export type Doc = { id: string; kind: string; filename: string; size_bytes: number; created_at: string };
+export type Doc = { id: string; kind: string; filename: string; size_bytes: number; created_at: string; meta: Record<string, unknown> };
 export type Run = {
   id: string;
   kind: string;
@@ -76,6 +76,7 @@ export type LadderPoint = {
 export type Recommendation = { entry_bid: number; target_low: number; target_high: number; walk_away: number; reasons: string[] };
 export type EngineResult = {
   breakeven_tariff: number | null;
+  our_mw?: number;
   dscr_tariff: number | null;
   hurdle: number;
   curve: { tariff: number; equity_irr: number | null; min_dscr: number | null }[];
@@ -100,6 +101,7 @@ export type RivalProfile = {
 export type Snapshot = { id: string; regime: string; seed: number; n_draws: number; profiles: RivalProfile[]; sha256: string };
 export type RivalResult = { seed: number; shift_inr_per_kwh: number; rivals: number; snapshots: Record<string, Snapshot> };
 
+export type Meaning = { title: string; what: string; for_us: string };
 export type TenderFact = {
   field: string;
   value: unknown;
@@ -110,13 +112,45 @@ export type TenderFact = {
   quote: string;
   verified: boolean;
   source: string;
+  meaning?: Meaning;
 };
+export type TenderPlain = { sections: { heading: string; text: string }[]; unusual: TenderFact[]; facts: number };
 export type TenderResult = { pages: number; facts: TenderFact[]; unusual_clauses: TenderFact[]; verified: number; sources: Record<string, number>; cost_usd: number };
 
 export type Scenario = { id: string; name: string; document_id: string; overrides: Record<string, unknown>; rival_run_id: string | null; source: string; created_at: string };
 export type ChatReply = { answer: string; scenario_id: string | null; run_id: string | null; grounded: string[]; ungrounded: string[]; cost_usd: number };
 export type ReplayEvent = Record<string, unknown> & { minute: number; type: string };
 export type Replay = { snapshot_id: string; draw: number; events: ReplayEvent[] };
+export type LlmSetting = { mode: string; source: string; unlockable: boolean; model: string };
+export type Observation = { minute: number; bidder: string; tariff: number };
+export type Pace = {
+  bidder: string;
+  bids: number;
+  last_tariff: number;
+  paise_per_minute: number;
+  projected_at_close: number | null;
+  below_record: boolean;
+  note: string;
+};
+export type LiveRead = {
+  minutes_left: number;
+  l1: number | null;
+  band_ceiling: number | null;
+  in_band: boolean | null;
+  survivors: number;
+  of: number;
+  matched: boolean;
+  ladder: LadderPoint[];
+  recommendation: Recommendation;
+  action: "hold" | "cut" | "walk away";
+  cut_to: number | null;
+  at_our_price: LadderPoint;
+  best: LadderPoint | null;
+  why: string[];
+  pace: Pace[];
+  caveats: string[];
+  snapshot_id: string;
+};
 export type AssumptionRow = { id: string; assumption: string; value: string; source: string; used_by: string; change_in: string };
 
 async function call<T>(path: string, init?: RequestInit): Promise<T> {
@@ -152,6 +186,15 @@ export const api = {
   scenarios: () => call<Scenario[]>("/api/scenarios"),
   chat: (message: string, document_id?: string) => post<ChatReply>("/api/chat", { message, document_id }),
   assumptions: () => call<{ rows: AssumptionRow[]; count: number }>("/api/assumptions"),
+  createScenario: (name: string, document_id: string, overrides: Record<string, unknown>) =>
+    post<Scenario>("/api/scenarios", { name, document_id, overrides, source: "ui" }),
+  runScenario: (id: string) => post<Run>(`/api/scenarios/${id}/run`, {}),
+  live: (docId: string, body: { observations: Observation[]; our_price: number; minutes_left: number; our_rank: number | null; assume_pace_holds: boolean }) =>
+    post<LiveRead>(`/api/live/${docId}`, body),
+  llmSetting: () => call<LlmSetting>("/api/settings/llm"),
+  setLlm: (secret: string) => post<LlmSetting>("/api/settings/llm", { secret }),
+  clearLlm: () => call<LlmSetting>("/api/settings/llm", { method: "DELETE" }),
+  tenderPlain: () => call<TenderPlain>("/api/tender/plain"),
   goalSeek: (docId: string, variable: string, target: string, targetValue: number) =>
     post<GoalSeek>(`/api/workbooks/${docId}/goal-seek`, { variable, target, target_value: targetValue }),
   upload: async (file: File) => {
