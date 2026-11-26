@@ -107,3 +107,34 @@ class ShortlistIn(BaseModel):
 class AllocateIn(BaseModel):
     eligible_mw: float = Field(examples=[700])
     bids: list[BidIn]
+
+
+class ChatIn(BaseModel):
+    message: str = Field(examples=["What if the interest rate rises by 50 basis points?"])
+    document_id: uuid.UUID | None = Field(default=None, description="The bid model; the seeded one when omitted")
+    scenario_id: uuid.UUID | None = Field(default=None, description="Ask about a saved scenario instead of the base")
+
+
+class ChatOut(BaseModel):
+    answer: str
+    scenario_id: uuid.UUID | None = None
+    run_id: uuid.UUID | None = None  # the engine rerun the answer's numbers come from
+    grounded: list[str] = Field(default_factory=list)  # every number in the answer, with the tool it came from
+    ungrounded: list[str] = Field(default_factory=list)  # always empty for an answer the API lets through
+    cost_usd: float = 0.0
+
+
+class BriefOut(BaseModel):
+    document_id: uuid.UUID
+    as_received: float | None
+    corrected: float | None
+    entry_bid: float | None
+    target_low: float | None
+    target_high: float | None
+    walk_away: float | None
+    bridge: list[dict[str, Any]]
+    depends_most_on: list[dict[str, Any]]
+    must_dos: dict[str, Any]
+    snapshot_id: str | None
+    sources: dict[str, Any]  # which run each block came from, so every number is one click from its origin
+    pending: list[str]  # agent runs that have not finished yet, so the UI can say what is still coming

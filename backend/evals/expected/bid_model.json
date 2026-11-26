@@ -2,48 +2,237 @@
   "file": "bid_model.xlsx",
   "sheets": 8,
   "formula_cells": 558,
-  "hidden_sheets": ["Inputs_old_v2"],
-  "defined_names": {"Tariff": "Inputs!$C$12", "Scenario": "Inputs!$C$5"},
-  "sheet_roles": {"Cover": "documentation", "Inputs_old_v2": "legacy_candidate", "CashFlow": "model", "Returns": "model"},
-  "kpis": {
-    "equity_irr": {"cell": "Returns!C8", "value": 0.142107489734805},
-    "project_irr_as_built": {"cell": "Returns!C9", "value": 0.11344730015704},
-    "min_dscr": {"cell": "Returns!C10", "value": 1.30927836411353}
+  "hidden_sheets": [
+    "Inputs_old_v2"
+  ],
+  "defined_names": {
+    "Tariff": "Inputs!$C$12",
+    "Scenario": "Inputs!$C$5"
   },
-  "goal_seek": {"variable": "Tariff", "target": "Returns!C8", "target_value": 0.14, "expected": 2.6039, "tolerance": 0.0005},
-  "goal_seek_dscr": {"variable": "Tariff", "target": "Returns!C10", "target_value": 1.20, "expected": 2.3757, "tolerance": 0.0005},
-  "unreferenced_inputs": ["Inputs!C13", "Inputs!C28", "Returns!C11"],
+  "sheet_roles": {
+    "Cover": "documentation",
+    "Inputs_old_v2": "legacy_candidate",
+    "CashFlow": "model",
+    "Returns": "model"
+  },
+  "kpis": {
+    "equity_irr": {
+      "cell": "Returns!C8",
+      "value": 0.142107489734805
+    },
+    "project_irr_as_built": {
+      "cell": "Returns!C9",
+      "value": 0.11344730015704
+    },
+    "min_dscr": {
+      "cell": "Returns!C10",
+      "value": 1.30927836411353
+    }
+  },
+  "goal_seek": {
+    "variable": "Tariff",
+    "target": "Returns!C8",
+    "target_value": 0.14,
+    "expected": 2.6039,
+    "tolerance": 0.0005
+  },
+  "goal_seek_dscr": {
+    "variable": "Tariff",
+    "target": "Returns!C10",
+    "target_value": 1.2,
+    "expected": 2.3757,
+    "tolerance": 0.0005
+  },
+  "unreferenced_inputs": [
+    "Inputs!C13",
+    "Inputs!C28",
+    "Returns!C11"
+  ],
   "auditor_targets": [
-    {"id": "hardcode_in_formula_row", "where": "CashFlow!I10", "severity": "medium", "why": "Year-6 O&M typed as -14 inside a formula row (formula gives -16.23)"},
-    {"id": "truncated_range", "where": "Returns!C9", "severity": "low", "why": "IRR(CashFlow!C26:AA26) drops year 25; sibling equity IRR uses C27:AB27"},
-    {"id": "orphan_input", "where": "Inputs!C28", "severity": "high", "why": "Insurance 0.25% of capex is never referenced; comment says 'to be wired'"},
-    {"id": "cosmetic_input", "where": "Inputs!C13", "severity": "low", "why": "PPA term input is not referenced; the 25-year horizon is fixed by the column layout"},
-    {"id": "stale_note", "where": "Returns!C16", "severity": "low", "why": "Says 'last run gave 2.57'; live breakeven is 2.6039"},
-    {"id": "whole_number_percent", "where": "Inputs!C21", "severity": "low", "why": "Interest stored as 9.25 with unit '% p.a.'; every other percent input on the sheet is a fraction"},
-    {"id": "legacy_sheet", "where": "Inputs_old_v2", "severity": "low", "why": "Hidden, unreferenced, conflicting values (250 MW, 2.71)"},
-    {"id": "tender_mismatch", "where": "Capex!D5", "severity": "high", "why": "Modules priced as ALMM List-II while the RfS exempts ALMM (clauses 3.3, 35.2)"},
-    {"id": "tender_mismatch", "where": "Inputs!C11", "severity": "medium", "why": "8760 hours vs 8766 in the RfS CUF definition (clause 43.9)"}
+    {
+      "id": "hardcode_in_formula_row",
+      "where": "CashFlow!I10",
+      "severity": "medium",
+      "why": "Year-6 O&M typed as -14 inside a formula row (formula gives -16.23)"
+    },
+    {
+      "id": "truncated_range",
+      "where": "Returns!C9",
+      "severity": "low",
+      "why": "IRR(CashFlow!C26:AA26) drops year 25; sibling equity IRR uses C27:AB27"
+    },
+    {
+      "id": "orphan_input",
+      "where": "Inputs!C28",
+      "severity": "high",
+      "why": "Insurance 0.25% of capex is never referenced; comment says 'to be wired'"
+    },
+    {
+      "id": "cosmetic_input",
+      "where": "Inputs!C13",
+      "severity": "low",
+      "why": "PPA term input is not referenced; the 25-year horizon is fixed by the column layout"
+    },
+    {
+      "id": "stale_note",
+      "where": "Returns!C16",
+      "severity": "low",
+      "why": "Says 'last run gave 2.57'; live breakeven is 2.6039"
+    },
+    {
+      "id": "whole_number_percent",
+      "where": "Inputs!C21",
+      "severity": "low",
+      "why": "Interest stored as 9.25 with unit '% p.a.'; every other percent input on the sheet is a fraction"
+    },
+    {
+      "id": "legacy_sheet",
+      "where": "Inputs_old_v2",
+      "severity": "low",
+      "why": "Hidden, unreferenced, conflicting values (250 MW, 2.71)"
+    },
+    {
+      "id": "tender_mismatch",
+      "where": "Capex!D5",
+      "severity": "high",
+      "why": "Modules priced as ALMM List-II while the RfS exempts ALMM (clauses 3.3, 35.2)"
+    },
+    {
+      "id": "tender_mismatch",
+      "where": "Inputs!C11",
+      "severity": "medium",
+      "why": "8760 hours vs 8766 in the RfS CUF definition (clause 43.9)"
+    }
   ],
   "auditor_impacts": {
     "_note": "Measured by applying one fix at a time to a temp copy and goal seeking Returns!C8 to 0.14. As received: 2.60388.",
-    "_tolerance": 0.0010,
-    "orphan_input:Inputs!C28": {"breakeven_with_fix": 2.6455, "impact": 0.0416, "why": "insurance charged in all 25 years, including the year someone typed over"},
-    "hardcode_in_formula_row:CashFlow!I10": {"breakeven_with_fix": 2.6067, "impact": 0.0028, "why": "year-6 O&M formula restored from the row pattern"},
-    "tender_mismatch:Inputs!C11": {"breakeven_with_fix": 2.6021, "impact": -0.0018, "why": "8766 hours per RfS clause 43.9"},
-    "tender_mismatch:Capex!D5": {"breakeven_with_fix": 2.2346, "impact": -0.3692, "assumptions": ["A-03"], "why": "modules re-priced at the mock INR 10/Wp import quote"}
+    "_tolerance": 0.001,
+    "orphan_input:Inputs!C28": {
+      "breakeven_with_fix": 2.6455,
+      "impact": 0.0416,
+      "why": "insurance charged in all 25 years, including the year someone typed over"
+    },
+    "hardcode_in_formula_row:CashFlow!I10": {
+      "breakeven_with_fix": 2.6067,
+      "impact": 0.0028,
+      "why": "year-6 O&M formula restored from the row pattern"
+    },
+    "tender_mismatch:Inputs!C11": {
+      "breakeven_with_fix": 2.6021,
+      "impact": -0.0018,
+      "why": "8766 hours per RfS clause 43.9"
+    },
+    "tender_mismatch:Capex!D5": {
+      "breakeven_with_fix": 2.2346,
+      "impact": -0.3692,
+      "assumptions": [
+        "A-03"
+      ],
+      "why": "modules re-priced at the mock INR 10/Wp import quote"
+    }
   },
   "zero_impact_findings": {
-    "truncated_range:Returns!C9": {"why": "the 14% breakeven goal seeks on equity IRR (Returns!C8); the truncated range only misreports project IRR, 11.34% instead of 11.44%"}
+    "truncated_range:Returns!C9": {
+      "why": "the 14% breakeven goal seeks on equity IRR (Returns!C8); the truncated range only misreports project IRR, 11.34% instead of 11.44%"
+    }
   },
   "not_findings": [
-    {"where": "Returns!C11", "max_severity": "info", "why": "target equity IRR is a goal-seek target, unused on purpose"},
-    {"where": "Capex!D11", "max_severity": "info", "why": "whole-number percent whose own unit label says '% (whole no.)' and which is divided by 100 one cell away"}
+    {
+      "where": "Returns!C11",
+      "max_severity": "info",
+      "why": "target equity IRR is a goal-seek target, unused on purpose"
+    },
+    {
+      "where": "Capex!D11",
+      "max_severity": "info",
+      "why": "whole-number percent whose own unit label says '% (whole no.)' and which is divided by 100 one cell away"
+    }
   ],
   "labels": {
     "Scenarios!D5": "CUF (AC)",
     "_why": "the nearest text to the left is the scenario name 'Base'; the column header names the input"
   },
   "tornado_seconds": 30,
-  "corrected_breakeven": {"value": 2.6465, "tolerance": 0.0010, "fixes": ["CashFlow!I10 as formula", "insurance wired at 0.25% of capex", "8766 hours"],
-    "excluded": ["Capex!D5 ALMM re-price, rests on A-03 (D-011)"]}
+  "corrected_breakeven": {
+    "value": 2.6465,
+    "tolerance": 0.001,
+    "fixes": [
+      "CashFlow!I10 as formula",
+      "insurance wired at 0.25% of capex",
+      "8766 hours"
+    ],
+    "excluded": [
+      "Capex!D5 ALMM re-price, rests on A-03 (D-011)"
+    ]
+  },
+  "what_ifs": [
+    {
+      "message": "What if the interest rate rises by 50 basis points?",
+      "cell": "Inputs!C21",
+      "before": 9.25,
+      "after": 9.75,
+      "why": "stored as a whole-number percent, so 50 bp is 0.5 here"
+    },
+    {
+      "message": "What if CUF is 30%?",
+      "cell": "Scenarios!D5",
+      "before": 0.31,
+      "after": 0.3,
+      "why": "the live scenario's CUF, named by its column header"
+    },
+    {
+      "message": "What if capex falls by 5%?",
+      "cell": "Scenarios!E5",
+      "before": 1.0,
+      "after": 0.95,
+      "why": "the capex multiplier is the input; Inputs!C16 is a link, not a number"
+    },
+    {
+      "message": "What if modules cost INR 10/Wp?",
+      "cell": "Capex!D5",
+      "before": 145,
+      "after": 100,
+      "why": "the cell is INR lakh/MWp; the note says 145 is INR 14.5/Wp, so the scale is 10"
+    },
+    {
+      "message": "What if O&M rises by 10%?",
+      "cell": "Inputs!C26",
+      "before": 7,
+      "after": 7.7,
+      "why": "O&M cost (yr 1)"
+    },
+    {
+      "message": "What if debt share is 75%?",
+      "cell": "Inputs!C20",
+      "before": 0.7,
+      "after": 0.75,
+      "why": "stored as a fraction"
+    },
+    {
+      "message": "What if we bid 2.50?",
+      "cell": "Inputs!C12",
+      "before": 2.62,
+      "after": 2.5,
+      "why": "the Tariff named range"
+    }
+  ],
+  "must_dos": {
+    "_note": "per-MW tender facts times our 200 MW, in crore (1 crore = 100 lakh = 1e7 INR)",
+    "emd": {
+      "cr": 16.0,
+      "from": "emd_per_mw"
+    },
+    "pbg": {
+      "cr": 40.0,
+      "from": "pbg_per_mw"
+    },
+    "success_charge": {
+      "cr": 2.0,
+      "from": "success_charge_per_mw"
+    },
+    "net_worth": {
+      "cr": 160.0,
+      "from": "net_worth_per_mw"
+    }
+  }
 }
