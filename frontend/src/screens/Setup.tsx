@@ -8,20 +8,24 @@ const kindName: Record<string, string> = { workbook: "Bid model", tender: "Tende
 const fmtSize = (n: number) => (n > 1_000_000 ? `${(n / 1_000_000).toFixed(1)} MB` : `${Math.round(n / 1000)} KB`);
 const MARK: Record<string, string> = { done: "✓", busy: "…", failed: "✕", todo: "○" };
 
+const money = (v: unknown, digits = 4) => (typeof v === "number" ? `₹${v.toFixed(digits)}` : "n/a");
+const count = (v: unknown) => (Array.isArray(v) ? v.length : 0);
+
+// One line per stored run. A result from an older version may lack a field; that is a "n/a", never a crash.
 function summarize(run: Run): string {
   if (run.status === "failed") return (run.error ?? "Failed").split("\n")[0];
   if (run.status !== "succeeded") return run.message ?? "Waiting for the worker";
   const r = run.result ?? {};
   if (run.kind === "reader" && r.kind === "workbook") {
-    const totals = r.totals as { sheets: number; formulas: number };
-    return `${totals.sheets} sheets, ${totals.formulas} formulas`;
+    const totals = (r.totals ?? {}) as { sheets?: number; formulas?: number };
+    return `${totals.sheets ?? "?"} sheets, ${totals.formulas ?? "?"} formulas`;
   }
-  if (run.kind === "reader" && r.kind === "tender") return `${r.pages} pages, ${(r.facts as unknown[] | undefined)?.length ?? 0} facts`;
-  if (run.kind === "reader" && r.kind === "history") return `${r.bids} bids cleaned`;
-  if (run.kind === "auditor") return `${(r.findings as unknown[]).length} findings, corrected ₹${(r.corrected_breakeven as number).toFixed(4)}`;
-  if (run.kind === "rival") return `${r.rivals} rivals, three snapshots`;
-  if (run.kind === "engine") return (r.ladder as unknown[])?.length ? `ladder of ${(r.ladder as unknown[]).length} prices` : `breakeven ₹${(r.breakeven_tariff as number).toFixed(4)}`;
-  if (run.kind === "copilot") return String((r.answer as string) ?? "").slice(0, 80);
+  if (run.kind === "reader" && r.kind === "tender") return `${r.pages ?? "?"} pages, ${count(r.facts)} facts`;
+  if (run.kind === "reader" && r.kind === "history") return `${r.bids ?? "?"} bids cleaned`;
+  if (run.kind === "auditor") return `${count(r.findings)} findings, corrected ${money(r.corrected_breakeven)}`;
+  if (run.kind === "rival") return `${r.rivals ?? "?"} rivals, three snapshots`;
+  if (run.kind === "engine") return count(r.ladder) ? `ladder of ${count(r.ladder)} prices` : `breakeven ${money(r.breakeven_tariff)}`;
+  if (run.kind === "copilot") return String(r.answer ?? "").slice(0, 80);
   return "Done";
 }
 
