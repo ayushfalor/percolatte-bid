@@ -165,6 +165,38 @@ def test_a_question_it_does_not_understand_is_answered_honestly(samples):
     assert not any(ch.isdigit() for ch in reply["answer"]), "a non-answer must not smuggle in a number"
 
 
+def test_a_price_question_reads_the_ladder_not_a_what_if(samples):
+    """ "Should we bid at 2.40?" is a question about the ladder, not a change to the model."""
+    from app.agents.copilot import Stored, answer
+
+    ladder = [
+        {
+            "tariff": 2.40,
+            "p_win_any": 0.21,
+            "p_win_full": 0.19,
+            "expected_mw": 40.0,
+            "p_h1_eliminated": 0.0,
+            "equity_irr": 0.109,
+            "min_dscr": 1.1,
+        },
+        {
+            "tariff": 2.41,
+            "p_win_any": 0.15,
+            "p_win_full": 0.13,
+            "expected_mw": 28.0,
+            "p_h1_eliminated": 0.0,
+            "equity_irr": 0.111,
+            "min_dscr": 1.11,
+        },
+    ]
+    rec = {"walk_away": 2.27, "entry_bid": 2.36, "target_low": 2.33, "target_high": 2.37, "reasons": []}
+    stored = Stored({"ladder": ladder, "recommendation": rec}, None, [])
+    reply = answer("Should we bid at 2.40, and what is the risk?", str(samples / "bid_model.xlsx"), stored)
+    assert reply["scenario"] is None, "a price question must not create a scenario"
+    assert "21%" in reply["answer"] and "2.40" in reply["answer"] and "2.27" in reply["answer"]
+    assert reply["ungrounded"] == [] and reply["withheld"] == []
+
+
 # ---------- over HTTP ----------
 
 

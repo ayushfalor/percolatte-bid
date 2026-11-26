@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from dataclasses import asdict
 from typing import Any
 
@@ -26,7 +27,12 @@ from . import AgentContext, agent
 
 log = logging.getLogger(__name__)
 
-POLICY = {"target_share": TARGET_SHARE, "typical_cut_paise": round(TYPICAL_CUT * 100), "max_h1_risk": 0.05}
+POLICY = {
+    "target_share": TARGET_SHARE,
+    "typical_cut_paise": round(TYPICAL_CUT * 100),
+    "max_h1_risk": 0.05,
+    "our_mw": 200,
+}
 WITHHELD = (
     "I had a number I could not trace back to a tool, so I have not shown it. "
     "Ask again and I will show only what the tools say."
@@ -44,8 +50,10 @@ SYSTEM = (
     "block, which holds numbers computed by the workbook's own formulas and the auction rules. Use only numbers "
     "that appear in DATA, written the way they appear (tariffs in INR per kWh to two decimals, percentages as "
     "percents, money in crore). If the question needs a number that is not in DATA, say you do not have it. "
-    "Never invent a figure, a clause, or a rival. Do not give advice beyond what DATA supports."
+    "Never invent a figure, a clause, or a rival. Do not give advice beyond what DATA supports. If the question is "
+    "not about this bid at all, say so in one sentence and offer what you can help with, and include no number."
 )
+PRICE_QUESTION = re.compile(r"\b(?:bid|bidding|price|tariff|quote)\b[^\d]{0,40}?(\d\.\d{1,2})\b", re.I)
 RIVALS_FROZEN = (
     "I cannot change what we believe about rivals from here. Rival beliefs are frozen once computed, "
     "so a fair comparison stays fair. To see a different field, run the Rival model again with another "
@@ -131,6 +139,31 @@ def _findings_answer(stored: Stored) -> tuple[str, list[Any]]:
     return text, [top, {"paise": [f["impact_inr_per_kwh"] * 100 for f in top]}]
 
 
+def _price_point_answer(stored: Stored, price: float) -> tuple[str, list[Any]]:
+    """What the ladder says at one price: odds, MW, returns, and where it sits against the floor."""
+    ladder = stored.engine.get("ladder") or []
+    rec = stored.engine.get("recommendation") or {}
+    if not ladder or not rec:
+        return "There is no price ladder yet. Run the Rival model and then the Engine, and ask me again.", []
+    p = min(ladder, key=lambda q: abs(q["tariff"] - price))
+    gap = (p["tariff"] - rec["walk_away"]) * 100
+    side = "above" if gap >= 0 else "below"
+    text = (
+        f"At ₹{p['tariff']:.2f}: {p['p_win_any']:.0%} chance of winning anything, {p['p_win_full']:.0%} of winning all "
+        f"{POLICY['our_mw']} MW, {p['expected_mw']:.0f} MW expected, "
+        f"{p['p_h1_eliminated']:.0%} chance of going out as H1. "
+        f"Equity IRR {p['equity_irr']:.1%}"
+        + (f", minimum DSCR {p['min_dscr']:.2f}" if p.get("min_dscr") is not None else "")
+        + f". That is {abs(gap):.0f} paise {side} the walk-away of ₹{rec['walk_away']:.2f}"
+        + (
+            ": below the floor is a loss, whatever the odds."
+            if gap < 0
+            else f"; the target range is ₹{rec['target_low']:.2f} to ₹{rec['target_high']:.2f}."
+        )
+    )
+    return text, [p, rec, {"gap_paise": abs(gap), "our_mw": POLICY["our_mw"]}]
+
+
 def _data_for_model(stored: Stored) -> dict[str, Any]:
     """The only facts the model may speak from: stored runs and tender facts, nothing it could invent."""
     findings = sorted(stored.auditor.get("findings") or [], key=lambda f: -abs(f.get("impact_inr_per_kwh") or 0))
@@ -151,6 +184,14 @@ def _data_for_model(stored: Stored) -> dict[str, Any]:
         ],
         "must_dos": must_dos(stored.facts),
         "policy": POLICY,
+        "hurdle_equity_irr": stored.engine.get("hurdle", 0.14),
+        "price_grid_inr_per_kwh": [2.0, 2.8],
+        "tender_facts": {
+            str(f.get("field") if isinstance(f, dict) else getattr(f, "field", "")): (
+                f.get("value") if isinstance(f, dict) else getattr(f, "value", None)
+            )
+            for f in stored.facts
+        },
     }
 
 
@@ -188,6 +229,8 @@ def answer(message: str, path: str, stored: Stored) -> dict[str, Any]:
     lower = message.lower()
     if asks_to_change_rivals(message):
         text = RIVALS_FROZEN
+    elif "what if" not in lower and (price := PRICE_QUESTION.search(message)) is not None:
+        text, tools = _price_point_answer(stored, float(price.group(1)))
     elif (wi := parse_what_if(message, path)) is not None:
         text, tools = _what_if_answer(wi, path)
         scenario = {"name": f"{wi.label}: {wi.phrase}", "overrides": {wi.cell: wi.after}, "what_if": asdict(wi)}

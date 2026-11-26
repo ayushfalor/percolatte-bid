@@ -171,11 +171,18 @@ module that the RfS's own worked examples test, and the Monte Carlo is proven to
 answers as that module. The evals were written before the code, on workbooks the app has never
 seen, and they run on every push.
 
-**What we left out.** The Scout (live web research on rivals) and dossiers; the smaller-field
-adjustment for this tender's SEZ requirement (A-07); fix toggles on the Audit screen; the
-"connectivity by a date" must-do, which no tender fact supports; OCR for scanned PDFs; and a
-migration tool, since the three tables are created on start. It is not hosted anywhere: it is built
-to run on the evaluator's own machine, and the server configuration is included but unused.
+**What we left out, and why.** Everything below was a deliberate choice, not an oversight.
+
+| What is missing | Why we left it out | What it means for you |
+|---|---|---|
+| **Web research on rivals** (the Scout agent) | It needs live web search and an API key, and the auction history already gives a solid, checkable picture of who bids and where they stop. The plan said to cut this first if time ran short, and it did. | Rivals are named by their history labels, not real company names, and there are no news-style dossiers. |
+| **A "smaller field" adjustment** for this tender's special-zone requirement | We had no data to say *how much* smaller the field would be, and a made-up number would look like knowledge. | Win odds may be a little cautious: the model assumes the usual crowd shows up. |
+| **Switching fixes on and off** on the Audit screen | Some fixes change formulas, not just numbers, so a simple toggle cannot apply them, and we never let the screen do its own arithmetic. | Use the bridge on the Bid Brief: it shows what each fix is worth, one line at a time. |
+| **A "connectivity by date" must-do** | No clause in the tender gives that date. We would rather show four must-dos we can prove than five with one guessed. | Check the connectivity deadline against the RfS yourself. |
+| **Reading scanned PDFs** | This tender has a proper text layer, and OCR would add a heavy dependency for a case we did not have. | A scanned tender will be read as empty pages and say so. |
+| **A database migration tool** | There are three tables, created automatically on start. A migration framework would be more machinery than the problem needs. | If the table layout changes, `make reset` rebuilds the database. |
+| **A hosted version** | It is built to run on your own machine, which is how it is evaluated. The server setup is included and tested for shape, but nothing is deployed. | Run it locally; the optional deploy steps are there if you ever want them. |
+| **A model writing the answers** when there is no key | Reviewers run without a key, so the Copilot understands what-ifs and the common questions by rule. With a key it uses a model only for questions the rules cannot answer, and still checks every number. | Without a key the Copilot is precise but literal; with one it is more conversational, never less honest. |
 
 Where it breaks:
 - Large models. A workbook of about 9,000 formulas takes around 25 s to load and 4.7 s per recalculation; the Auditor prices each fix with a goal seek, so an audit of that size can run for minutes. Not yet optimised.
