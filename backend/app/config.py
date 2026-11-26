@@ -30,6 +30,7 @@ class Settings(BaseSettings):
     llm_model_fast: str = "claude-haiku-5-5"
     seed_samples: bool = True
     samples_dir: str = _default_samples_dir()
+    cache_dir: str = str(Path(_default_samples_dir()).parent / "cache")  # LLM outputs keyed by file hash
     work_dir: str = "/tmp/bidbench"
     sim_seed: int = 42
     worker_poll_seconds: float = 1.0

@@ -69,7 +69,7 @@ browser ──> web (nginx + React) ──> api (FastAPI) ──> db (Postgres 1
 
 | Agent | Job | Status |
 |---|---|---|
-| Reader | Excel, tender PDF and auction history into clean, cited facts | built (LLM tender extraction next) |
+| Reader | Excel, tender PDF and auction history into clean, cited facts | built (rule extraction, live LLM pass with a key, cache by file hash) |
 | Auditor | Model bugs and tender-vs-model mismatches, each fix priced in INR/kWh | built (tender mismatches need Phase 2 facts) |
 | Scout | Web research on rivals, facts with URL and date | planned |
 | Rival model | Per rival: chance of bidding at each price, and why. Frozen once computed | planned |
@@ -124,6 +124,12 @@ See [docs/RUNBOOK.md](docs/RUNBOOK.md). Most common: a port is busy (set `WEB_PO
 or Docker Desktop is not running.
 
 ## What we built and why, what we left out, where it breaks
+
+Where it breaks:
+- Large models. A workbook of about 9,000 formulas takes around 25 s to load and 4.7 s per recalculation; the Auditor prices each fix with a goal seek, so an audit of that size can run for minutes. Not yet optimised.
+- Functions the formula library lacks (OFFSET, INDIRECT on a built string) are reported by cell; numbers that depend on them are withheld, not guessed.
+- Scanned PDFs need OCR, which is not built. Clause numbers on tender facts are best effort.
+- Rivals, the price ladder, the copilot and deployment (phases 3 to 6) are not built.
 
 TODO before submitting.
 

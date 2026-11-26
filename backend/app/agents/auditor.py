@@ -10,7 +10,7 @@ from dataclasses import asdict
 from typing import Any
 
 from ..core.audit import audit_workbook, breakeven_with_fixes, corrected_breakeven_from, tornado
-from . import AgentContext, agent
+from . import AgentContext, agent, tender_document_id
 
 
 def _tender_facts(ctx: AgentContext) -> list[dict[str, Any]]:
@@ -18,8 +18,9 @@ def _tender_facts(ctx: AgentContext) -> list[dict[str, Any]]:
 
     Empty until Phase 2 lands, which is fine: the model-against-itself checks do not need them.
     """
-    tender = ctx.latest_result("tender") or {}
-    return list(tender.get("facts", []))
+    tender_id = tender_document_id()
+    reader = ctx.latest_result("reader", tender_id) if tender_id else None
+    return list((reader or {}).get("facts", []))
 
 
 @agent("auditor", "Auditor", "Finds model bugs and tender mismatches, prices each fix in INR/kWh")

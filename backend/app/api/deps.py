@@ -29,9 +29,15 @@ def workbook_engine(document_id: uuid.UUID) -> WorkbookEngine:
 
 
 def latest_tender_facts() -> list[dict]:
-    """Facts from the most recent finished tender run, or none while that agent is a stub."""
+    """Facts from the most recent finished Reader run on a tender document, or none."""
     with SessionLocal() as session:
+        tender = session.scalars(select(Document.id).where(Document.kind == "tender").limit(1)).first()
+        if tender is None:
+            return []
         run = session.scalars(
-            select(Run).where(Run.kind == "tender", Run.status == "succeeded").order_by(Run.finished_at.desc()).limit(1)
+            select(Run)
+            .where(Run.kind == "reader", Run.document_id == tender, Run.status == "succeeded")
+            .order_by(Run.finished_at.desc())
+            .limit(1)
         ).first()
         return list((run.result or {}).get("facts", [])) if run else []

@@ -88,5 +88,11 @@ def make_context(run: Run) -> AgentContext:
     return AgentContext(run.id, run.kind, run.params or {}, run.document_id, get_settings())
 
 
+def tender_document_id() -> Any | None:
+    """The tender in the workspace, if one has been uploaded. Read-only."""
+    with SessionLocal() as s:
+        return s.scalars(select(Document.id).where(Document.kind == "tender").limit(1)).first()
+
+
 # Import order = pipeline order, and REGISTRY keeps it, so do not let isort sort this line.
 from . import reader, auditor, scout, rival, modeling, copilot  # noqa: E402,F401,I001
