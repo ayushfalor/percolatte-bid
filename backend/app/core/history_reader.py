@@ -66,4 +66,44 @@ def read_history(path: str) -> dict[str, Any]:
         "raw_bidder_names": int(raw_names),
         "bidder_groups": int(groups),
         "fixes": fixes,
+        "solar_ists": _solar_ists(tenders, bids, name_col),
+    }
+
+
+SOLAR_ISTS = "Solar (ISTS)"
+FINAL = "Final e-RA tariff (INR/kWh)"
+OPENING = "Financial bid tariff (INR/kWh)"
+L1 = "L1 tariff (INR/kWh)"
+
+
+def _solar_ists(tenders: pd.DataFrame, bids: pd.DataFrame, name_col: str) -> dict[str, Any]:
+    """What each bidder group did in the solar ISTS auctions: the rival model's raw material.
+
+    Kept as plain numbers per group rather than the bid rows, so the Reader's result stays small
+    and the rival model never has to reopen the workbook.
+    """
+    solar_tenders = tenders[tenders["Category"] == SOLAR_ISTS]
+    solar = bids[bids["Category"] == SOLAR_ISTS]
+    l1 = {tid: float(v) for tid, v in zip(solar_tenders["Tender ID"], solar_tenders[L1]) if pd.notna(v)}
+    cuts = (solar[OPENING] - solar[FINAL]).dropna()
+    groups: dict[str, Any] = {}
+    for name, g in solar.groupby("group"):
+        finals = [float(v) for v in g[FINAL].dropna()]
+        at_l1 = sum(
+            1 for tid, f in zip(g["Tender ID"], g[FINAL]) if pd.notna(f) and abs(float(f) - l1.get(tid, -1)) < 1e-9
+        )
+        groups[str(name)] = {
+            "tenders": sorted(g["Tender ID"].unique().tolist()),
+            "wins": int((g["Successful?"].astype(str).str.lower() == "yes").sum()),
+            "at_l1": int(at_l1),
+            "quoted_mw": [float(v) for v in g["Quoted capacity (MW)"].dropna()],
+            "final_tariffs": finals,
+            "opening_tariffs": [float(v) for v in g[OPENING].dropna()],
+            "names": sorted(g[name_col].unique().tolist()),
+        }
+    return {
+        "tenders": len(solar_tenders),
+        "l1_tariffs": l1,
+        "median_cut": float(cuts.median()) if len(cuts) else 0.0,
+        "groups": groups,
     }
