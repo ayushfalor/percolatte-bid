@@ -28,6 +28,16 @@ def workbook_engine(document_id: uuid.UUID) -> WorkbookEngine:
     return get_engine(materialize(doc.sha256, ext, doc.content))
 
 
+def latest_run(kind: str, document_id: uuid.UUID | None = None) -> dict | None:
+    """The most recent finished run of this kind, as a plain dict, or None."""
+    with SessionLocal() as session:
+        q = select(Run).where(Run.kind == kind, Run.status == "succeeded")
+        if document_id is not None:
+            q = q.where(Run.document_id == document_id)
+        run = session.scalars(q.order_by(Run.finished_at.desc()).limit(1)).first()
+        return {"id": run.id, "result": run.result or {}, "finished_at": run.finished_at} if run else None
+
+
 def latest_tender_facts() -> list[dict]:
     """Facts from the most recent finished Reader run on a tender document, or none."""
     with SessionLocal() as session:
