@@ -97,7 +97,8 @@ def recommend(
     reasons = [
         f"Walk-away {walk_away:.2f}: the stricter of the {hurdle_tariff:.2f} hurdle tariff"
         + (f" and the {dscr_tariff:.2f} DSCR tariff." if dscr_tariff else "."),
-        f"Target {target_low:.2f} to {target_high:.2f}: within {TARGET_SHARE:.0%} of the best expected value above the floor.",
+        f"Target {target_low:.2f} to {target_high:.2f}: "
+        f"within {TARGET_SHARE:.0%} of the best expected value above the floor.",
         f"Entry {entry.tariff:.2f}: room for the typical {TYPICAL_CUT * 100:.0f} paise cut, "
         f"{entry.p_h1_eliminated:.1%} chance of going out as H1.",
     ]

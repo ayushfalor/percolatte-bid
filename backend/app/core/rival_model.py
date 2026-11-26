@@ -71,7 +71,8 @@ def _profile(name: str, stats: dict[str, Any], solar: dict[str, Any], shift: flo
     p10, p50, p90 = (f - shift for f in _floors(stats["final_tariffs"], typical_l1, field_sd))
     archetype = _archetype(stats, typical_l1)
     why = [
-        f"Bid in {plays} of {n_tenders} solar ISTS auctions, won {stats['wins']}, finished at L1 {stats['at_l1']} times.",
+        f"Bid in {plays} of {n_tenders} solar ISTS auctions, won {stats['wins']}, "
+        f"finished at L1 {stats['at_l1']} times.",
         (
             f"Final tariffs ran from {min(stats['final_tariffs']):.2f} to {max(stats['final_tariffs']):.2f}."
             if stats["final_tariffs"]
@@ -105,7 +106,7 @@ def _draw_array(profiles: list[RivalProfile], seed: int, n_draws: int) -> np.nda
     out = np.zeros((n_draws, n, 4))
     for j, p in enumerate(profiles):
         out[:, j, 0] = rng.random(n_draws) < p.p_participate
-        mws, probs = zip(*p.capacity_mw)
+        mws, probs = zip(*p.capacity_mw, strict=True)
         out[:, j, 1] = rng.choice(mws, size=n_draws, p=np.array(probs) / sum(probs))
         sd = max((p.floor_p90 - p.floor_p10) / (2 * Z80), MIN_SPREAD / Z80)
         floor = p.floor_p50 + market[:, 0] + rng.normal(0.0, sd, n_draws) - SURPRISE_CUT * surprise[:, j]

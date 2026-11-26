@@ -84,13 +84,13 @@ def _solar_ists(tenders: pd.DataFrame, bids: pd.DataFrame, name_col: str) -> dic
     """
     solar_tenders = tenders[tenders["Category"] == SOLAR_ISTS]
     solar = bids[bids["Category"] == SOLAR_ISTS]
-    l1 = {tid: float(v) for tid, v in zip(solar_tenders["Tender ID"], solar_tenders[L1]) if pd.notna(v)}
+    l1 = {tid: float(v) for tid, v in zip(solar_tenders["Tender ID"], solar_tenders[L1], strict=True) if pd.notna(v)}
     cuts = (solar[OPENING] - solar[FINAL]).dropna()
     groups: dict[str, Any] = {}
     for name, g in solar.groupby("group"):
         finals = [float(v) for v in g[FINAL].dropna()]
         at_l1 = sum(
-            1 for tid, f in zip(g["Tender ID"], g[FINAL]) if pd.notna(f) and abs(float(f) - l1.get(tid, -1)) < 1e-9
+            1 for tid, f in zip(g["Tender ID"], g[FINAL], strict=True) if pd.notna(f) and abs(float(f) - l1.get(tid, -1)) < 1e-9
         )
         groups[str(name)] = {
             "tenders": sorted(g["Tender ID"].unique().tolist()),
