@@ -44,6 +44,7 @@ CANNOT_ANSWER = (
     "and list what must be ready to bid. Ask one of those and every number I give you comes from a tool."
 )
 USD_PER_MILLION = {"input": 3.0, "output": 15.0}  # approximate list price, for the cost line only
+MAX_ANSWER_TOKENS = 1500  # the model may think before it writes, and that counts against this budget
 SYSTEM = (
     "You are the Copilot of a bid workbench for a solar developer bidding in SECI's 700 MW C&I-1 tender. "
     "Answer the question in plain English, in at most five sentences. You have one source of truth: the DATA "
@@ -205,7 +206,7 @@ def _llm_answer(message: str, stored: Stored) -> tuple[str, list[Any], float]:
         client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
         response = client.messages.create(
             model=settings.llm_model_smart,
-            max_tokens=400,
+            max_tokens=MAX_ANSWER_TOKENS,
             system=SYSTEM,
             messages=[{"role": "user", "content": f"DATA:\n{json.dumps(data, default=str)}\n\nQUESTION: {message}"}],
         )
@@ -213,6 +214,8 @@ def _llm_answer(message: str, stored: Stored) -> tuple[str, list[Any], float]:
         log.warning("Copilot model call failed: %s", exc)
         return CANNOT_ANSWER, [], 0.0
     text = "".join(block.text for block in response.content if getattr(block, "type", "") == "text").strip()
+    if getattr(response, "stop_reason", "") == "max_tokens":
+        log.warning("Copilot answer hit the token budget; the reply may be cut short")
     usage = response.usage
     cost = (usage.input_tokens * USD_PER_MILLION["input"] + usage.output_tokens * USD_PER_MILLION["output"]) / 1e6
     return (text or CANNOT_ANSWER), [data], cost
