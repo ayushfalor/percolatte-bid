@@ -132,6 +132,7 @@ class BriefOut(BaseModel):
     target_low: float | None
     target_high: float | None
     walk_away: float | None
+    reasons: list[str] = Field(default_factory=list)  # the Engine's own words for the three numbers
     bridge: list[dict[str, Any]]
     depends_most_on: list[dict[str, Any]]
     must_dos: dict[str, Any]

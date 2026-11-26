@@ -16,8 +16,15 @@ cd percolatte-bid
 docker compose up --build
 ```
 
-Open **http://localhost:3000**. The first build takes a few minutes; later starts take seconds.
-The three sample files (bid model, tender PDF, auction history) load automatically.
+Open **http://localhost:3000**. The first build downloads Postgres and the Python packages, which
+takes five to fifteen minutes depending on your connection; later starts take seconds. The three
+sample files (bid model, tender PDF, auction history) load by themselves, the agents run by
+themselves, and within a couple of minutes the Bid Brief shows the three numbers. Upload your own
+bid model on the Setup screen and it is read, audited and priced the same way; the header lets you
+switch between models.
+
+This is built to run on your machine. Nothing is hosted anywhere; the optional server setup
+further down is there if you ever want it, not something the evaluation needs.
 
 No `.env` file and no API key are needed. Without a key the app runs in **offline mode**:
 everything deterministic works fully and AI steps use cached results for the sample files.
@@ -120,9 +127,9 @@ All optional, set in `.env` (see `.env.example`).
 | `SEED_SAMPLES` | true | load the sample files on first start |
 | `SIM_SEED` | 42 | Monte Carlo seed, so results are reproducible |
 
-## Deploy it
+## Deploy it (optional)
 
-One small VM with Docker is enough. Clone the repo to `/opt/bid-workbench`, put `POSTGRES_PASSWORD`
+Not needed to evaluate the app; it runs on your machine. If you ever want it on a server, one small VM with Docker is enough. Clone the repo to `/opt/bid-workbench`, put `POSTGRES_PASSWORD`
 and optionally `DOMAIN` and `ANTHROPIC_API_KEY` in its `.env`, then:
 
 ```bash
@@ -164,7 +171,8 @@ seen, and they run on every push.
 **What we left out.** The Scout (live web research on rivals) and dossiers; the smaller-field
 adjustment for this tender's SEZ requirement (A-07); fix toggles on the Audit screen; the
 "connectivity by a date" must-do, which no tender fact supports; OCR for scanned PDFs; and a
-migration tool, since the three tables are created on start.
+migration tool, since the three tables are created on start. It is not hosted anywhere: it is built
+to run on the evaluator's own machine, and the server configuration is included but unused.
 
 Where it breaks:
 - Large models. A workbook of about 9,000 formulas takes around 25 s to load and 4.7 s per recalculation; the Auditor prices each fix with a goal seek, so an audit of that size can run for minutes. Not yet optimised.

@@ -23,28 +23,42 @@ function summarize(run: Run): string {
   return "Done";
 }
 
-export function Setup({ health, docs, agents, runs }: { health: Health | null; docs: Doc[]; agents: Agent[]; runs: Run[] }) {
+export function Setup({
+  health,
+  docs,
+  workbook,
+  agents,
+  runs,
+  onUploaded,
+}: {
+  health: Health | null;
+  docs: Doc[];
+  workbook: Doc | undefined;
+  agents: Agent[];
+  runs: Run[];
+  onUploaded: (id: string) => void;
+}) {
   const fileInput = useRef<HTMLInputElement>(null);
   const [note, setNote] = useState<string | null>(null);
   const runsLive = useLive(() => api.runs("limit=40"), 1500);
   const list = runsLive.data ?? runs;
   const pending = list.filter((r) => r.status === "queued" || r.status === "running").length;
   const apiLight: Light = health ? "ok" : "busy";
-  const workbook = docs.find((d) => d.kind === "workbook");
   const history = docs.find((d) => d.kind === "history");
 
   async function upload(file: File) {
     setNote(`Uploading ${file.name}`);
     try {
       const res = await api.upload(file);
-      setNote(res.created ? `${file.name} added. The Reader is on it.` : `${file.name} was already loaded.`);
+      setNote(res.created ? `${file.name} added. It is being read, audited and priced; the Bid Brief fills in as runs finish.` : `${file.name} was already loaded.`);
+      if (res.document?.id) onUploaded(res.document.id);
     } catch (e) {
       setNote((e as Error).message);
     }
   }
   async function runAll() {
     if (!workbook || !history) return setNote("Need a bid model and an auction history first.");
-    setNote("Queued: Auditor, Rival model, Engine. The Engine waits for the rivals.");
+    setNote(`Queued for ${workbook.filename}: Auditor, Rival model, Engine. The Engine runs after the rivals.`);
     await api.startRun("auditor", workbook.id);
     await api.startRun("rival", history.id);
     await api.startRun("engine", workbook.id);
@@ -63,7 +77,7 @@ export function Setup({ health, docs, agents, runs }: { health: Health | null; d
         <div className="section-head">
           <h2>Files</h2>
           <button className="ghost" onClick={() => fileInput.current?.click()}>Upload a file</button>
-          <button onClick={runAll}>Run the agents</button>
+          <button onClick={runAll}>Run the agents again</button>
           <input ref={fileInput} type="file" accept=".xlsx,.xlsm,.pdf" hidden onChange={(e) => e.target.files?.[0] && upload(e.target.files[0])} />
         </div>
         {note && <p className="note">{note}</p>}

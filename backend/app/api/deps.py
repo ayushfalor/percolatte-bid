@@ -30,14 +30,23 @@ def workbook_engine(document_id: uuid.UUID) -> WorkbookEngine:
     return get_engine(materialize(doc.sha256, ext, doc.content))
 
 
-def latest_run(kind: str, document_id: uuid.UUID | None = None) -> dict | None:
-    """The most recent finished run of this kind, as a plain dict, or None."""
+def latest_run(kind: str, document_id: uuid.UUID | None = None, base_only: bool = True) -> dict | None:
+    """The most recent finished run of this kind, as a plain dict, or None.
+
+    A what-if reruns the engine with overrides. Those runs belong to their scenario; the Brief
+    and the War Room's base line must come from a run without overrides, so by default they
+    are skipped.
+    """
     with SessionLocal() as session:
         q = select(Run).where(Run.kind == kind, Run.status == "succeeded")
         if document_id is not None:
             q = q.where(Run.document_id == document_id)
-        run = session.scalars(q.order_by(Run.finished_at.desc()).limit(1)).first()
-        return {"id": run.id, "result": run.result or {}, "finished_at": run.finished_at} if run else None
+        for run in session.scalars(q.order_by(Run.finished_at.desc()).limit(50)):
+            params = run.params or {}
+            if base_only and ("scenario_id" in params or params.get("overrides")):
+                continue
+            return {"id": run.id, "result": run.result or {}, "finished_at": run.finished_at}
+        return None
 
 
 _facts_by_hash: dict[str, list[dict]] = {}

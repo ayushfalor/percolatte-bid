@@ -139,3 +139,6 @@ blockquote { margin: 8px 0 0; padding-left: 12px; border-left: 3px solid var(--r
 .drawer form { display: flex; gap: 8px; }
 .drawer input { flex: 1; width: auto; }
 @media (max-width: 900px) { .cards, .rivals { grid-template-columns: 1fr; } .with-drawer { padding-right: 24px; } .drawer { width: 100%; } }
+
+.picker { display: inline-grid; gap: 2px; font-size: 0.85rem; margin-left: auto; }
+.picker select { padding: 4px 8px; }

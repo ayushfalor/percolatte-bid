@@ -29,9 +29,12 @@ export default function App() {
   const agents = useLive(useCallback(api.agents, []), 60000);
   const runs = useLive(useCallback(() => api.runs("limit=40"), []), 5000);
   const [copilotOpen, setCopilotOpen] = useState(false);
+  const [chosen, setChosen] = useState<string | null>(null);
 
   const files: Doc[] = docs.data ?? [];
-  const workbook = files.find((d) => d.kind === "workbook");
+  const workbooks = files.filter((d) => d.kind === "workbook");
+  // The seeded sample until you upload your own; an upload selects the new file.
+  const workbook = workbooks.find((d) => d.id === chosen) ?? workbooks[0];
   const tender = files.find((d) => d.kind === "tender");
   const title = SCREENS.find((s) => s.key === screen)?.title ?? "Bid Brief";
 
@@ -40,6 +43,16 @@ export default function App() {
       <header>
         <div className="section-head">
           <h1>Bid Workbench</h1>
+          {workbooks.length > 1 && (
+            <label className="picker">
+              Model
+              <select value={workbook?.id ?? ""} onChange={(e) => setChosen(e.target.value)} aria-label="Which bid model to show">
+                {workbooks.map((d) => (
+                  <option key={d.id} value={d.id}>{d.filename}</option>
+                ))}
+              </select>
+            </label>
+          )}
           <button className="ghost" onClick={() => setCopilotOpen((o) => !o)}>{copilotOpen ? "Hide Copilot" : "Ask the Copilot"}</button>
         </div>
         <p className="lede">SECI 700 MW C&amp;I-1. Three numbers to act on, and every one of them a click from its source.</p>
@@ -51,8 +64,20 @@ export default function App() {
       </header>
       {health.error && <p className="alert" role="alert">Can’t reach the API. Check <code>docker compose ps</code>, then <code>docker compose logs api</code>.</p>}
 
-      <h2 className="screen-title">{title}</h2>
-      {screen === "setup" && <Setup health={health.data as Health | null} docs={files} agents={(agents.data ?? []) as Agent[]} runs={(runs.data ?? []) as Run[]} />}
+      <h2 className="screen-title">{title}{workbook && workbooks.length > 1 ? <span className="note"> · {workbook.filename}</span> : null}</h2>
+      {screen === "setup" && (
+        <Setup
+          health={health.data as Health | null}
+          docs={files}
+          workbook={workbook}
+          agents={(agents.data ?? []) as Agent[]}
+          runs={(runs.data ?? []) as Run[]}
+          onUploaded={(id) => {
+            setChosen(id);
+            docs.refresh();
+          }}
+        />
+      )}
       {screen === "brief" && (workbook ? <Brief workbook={workbook} docs={files} /> : <NoModel />)}
       {screen === "war-room" && (workbook ? <WarRoom workbook={workbook} /> : <NoModel />)}
       {screen === "rivals" && <Rivals />}

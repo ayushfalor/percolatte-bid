@@ -94,11 +94,20 @@ def recommend(
 
     safe = [p for p in above if p.tariff >= walk_away + TYPICAL_CUT - 1e-9 and p.p_h1_eliminated <= max_h1_risk]
     entry = min(safe, key=lambda p: p.tariff) if safe else min(above, key=lambda p: (p.p_h1_eliminated, p.tariff))
+    first_above = min(above, key=lambda p: p.tariff)
+    nothing_wins = best <= 0
     reasons = [
         f"Walk-away {walk_away:.2f}: the stricter of the {hurdle_tariff:.2f} hurdle tariff"
         + (f" and the {dscr_tariff:.2f} DSCR tariff." if dscr_tariff else "."),
-        f"Target {target_low:.2f} to {target_high:.2f}: "
-        f"within {TARGET_SHARE:.0%} of the best expected value above the floor.",
+        (
+            f"No price at or above the walk-away wins in this regime: the chance of winning is "
+            f"{first_above.p_win_any:.0%} at {first_above.tariff:.2f} and falls from there. The target and entry "
+            f"sit at the floor because nothing above it has value; a lever that lowers the floor, such as the "
+            f"ALMM module re-price, is what changes this."
+            if nothing_wins
+            else f"Target {target_low:.2f} to {target_high:.2f}: "
+            f"within {TARGET_SHARE:.0%} of the best expected value above the floor."
+        ),
         f"Entry {entry.tariff:.2f}: room for the typical {TYPICAL_CUT * 100:.0f} paise cut, "
         f"{entry.p_h1_eliminated:.1%} chance of going out as H1.",
     ]

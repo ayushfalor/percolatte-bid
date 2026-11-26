@@ -32,6 +32,7 @@ export type Brief = {
   target_low: number | null;
   target_high: number | null;
   walk_away: number | null;
+  reasons: string[];
   bridge: BridgeStep[];
   depends_most_on: Driver[];
   must_dos: Record<string, MustDo>;
@@ -135,9 +136,10 @@ export const api = {
   runs: (query = "limit=40") => call<Run[]>(`/api/runs?${query}`),
   run: (id: string) => call<Run>(`/api/runs/${id}`),
   latestRun: async (kind: string, documentId?: string) => {
-    const q = `kind=${kind}&status=succeeded&limit=1` + (documentId ? `&document_id=${documentId}` : "");
+    // A what-if reruns the engine for its scenario; the base line is the latest run without overrides.
+    const q = `kind=${kind}&status=succeeded&limit=50` + (documentId ? `&document_id=${documentId}` : "");
     const rows = await call<Run[]>(`/api/runs?${q}`);
-    return rows[0] ?? null;
+    return rows.find((r) => !r.params?.scenario_id && !r.params?.overrides) ?? null;
   },
   startRun: (kind: string, document_id: string | null, params: Record<string, unknown> = {}) =>
     post<Run>("/api/runs", { kind, document_id, params }),

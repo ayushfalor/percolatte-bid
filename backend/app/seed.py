@@ -30,6 +30,10 @@ def add_document(filename: str, content: bytes, enqueue_reader: bool = True) -> 
         if enqueue_reader:
             run = Run(kind="reader", document_id=doc.id, params={})
             s.add(run)
+            # A bid model gets audited and priced by itself; the worker runs jobs in the order queued.
+            if kind == "workbook":
+                s.add(Run(kind="auditor", document_id=doc.id, params={}))
+                s.add(Run(kind="engine", document_id=doc.id, params={}))
         s.commit()
         return doc, True, run
 
@@ -46,8 +50,24 @@ def seed_samples() -> int:
             created += int(was_created)
     if created:
         log.info("Seeded %d sample file(s) from %s", created, folder)
+        queue_first_run()
     reread_stale_tenders()
     return created
+
+
+def queue_first_run() -> None:
+    """On a fresh database, run the whole pipeline once so the Brief fills in with no clicks.
+
+    Readers are already queued per file. The rival model needs the history, and the engine needs
+    the rival run before it, so the order here is the order the worker will execute them in.
+    """
+    with SessionLocal() as s:
+        history = s.scalars(select(Document).where(Document.kind == "history").limit(1)).first()
+        if history is not None:
+            s.add(Run(kind="rival", document_id=history.id, params={}))
+        for workbook in s.scalars(select(Document).where(Document.kind == "workbook")):
+            s.add(Run(kind="engine", document_id=workbook.id, params={"reason": "first start, after the rivals"}))
+        s.commit()
 
 
 def reread_stale_tenders() -> int:

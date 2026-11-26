@@ -250,3 +250,33 @@ def test_chat_cost_is_zero_offline(api_client):
         pytest.skip("a key is set; cost is only zero offline")
     r = api_client.post("/api/chat", json={"message": "What if O&M rises by 10%?"}).json()
     assert r["cost_usd"] == 0.0
+
+
+@pytest.mark.stack
+def test_first_start_runs_the_agents_by_itself(api_client):
+    """A reviewer opens the app and the three numbers arrive without clicking anything."""
+    model, history = _doc(api_client, "bid_model.xlsx"), _doc(api_client, "auction_history.xlsx")
+    for kind, doc in (("auditor", model), ("rival", history), ("engine", model)):
+        runs = api_client.get("/api/runs", params={"kind": kind, "document_id": doc["id"], "limit": 5}).json()
+        assert runs, f"no {kind} run was queued for the seeded {doc['filename']}"
+
+
+@pytest.mark.stack
+def test_uploaded_workbook_is_audited_by_itself(api_client, bugged_workbook):
+    """Upload a model the app has never seen; its own Brief fills in with no further clicks."""
+    path, truth = bugged_workbook
+    with open(path, "rb") as fh:
+        up = api_client.post("/api/documents", files={"file": ("wind_bugged.xlsx", fh.read())}).json()
+    doc_id = up["document"]["id"]
+    deadline = time.time() + 300
+    while time.time() < deadline:
+        runs = {r["kind"]: r for r in api_client.get("/api/runs", params={"document_id": doc_id, "limit": 20}).json()}
+        if all(k in runs and runs[k]["status"] in ("succeeded", "failed") for k in ("reader", "auditor", "engine")):
+            break
+        time.sleep(1)
+    assert runs["auditor"]["status"] == "succeeded", runs["auditor"].get("error")
+    assert runs["engine"]["status"] == "succeeded", runs["engine"].get("error")
+    brief = api_client.get(f"/api/brief/{doc_id}").json()
+    assert brief["as_received"] and brief["corrected"] and brief["corrected"] > brief["as_received"]
+    found = {f["where"] for f in runs["auditor"]["result"]["findings"]}
+    assert truth["typed_over_cell"] in found and truth["orphan_input_cell"] in found

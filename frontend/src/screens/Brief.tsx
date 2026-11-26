@@ -24,6 +24,7 @@ export function Brief({ workbook, docs }: { workbook: Doc; docs: Doc[] }) {
         <Card title="Target range" value={b.target_low == null ? "n/a" : `${inr(b.target_low)} to ${inr(b.target_high)}`} note="Where chance of winning times profit is highest." />
         <Card title="Walk-away" value={inr(b.walk_away)} note="Never go below this in the auction." tone="red" />
       </section>
+      {b.reasons.length > 0 && <ul className="reasons">{b.reasons.map((r) => <li key={r}>{r}</li>)}</ul>}
       {b.pending.length > 0 && (
         <p className="alert">
           Waiting on: {b.pending.join(", ")}.{" "}
