@@ -10,9 +10,12 @@ the same facts; it would never be allowed to add a number.
 
 from __future__ import annotations
 
+import json
+import logging
 from dataclasses import asdict
 from typing import Any
 
+from ..config import get_settings
 from ..core.audit import breakeven_with_fixes
 from ..core.brief import must_dos
 from ..core.contracts import Fix
@@ -21,10 +24,27 @@ from ..core.simulate import TARGET_SHARE, TYPICAL_CUT
 from ..core.whatif import WhatIf, asks_to_change_rivals, parse_what_if
 from . import AgentContext, agent
 
+log = logging.getLogger(__name__)
+
 POLICY = {"target_share": TARGET_SHARE, "typical_cut_paise": round(TYPICAL_CUT * 100), "max_h1_risk": 0.05}
 WITHHELD = (
     "I had a number I could not trace back to a tool, so I have not shown it. "
     "Ask again and I will show only what the tools say."
+)
+CANNOT_ANSWER = (
+    "I did not understand that, and I would rather say so than guess. I can do four things: "
+    "run a what-if on an input of the model (for example, what if the interest rate rises by fifty basis points, "
+    "or what if CUF is thirty percent); explain the walk-away, target and entry bid; say which inputs matter most; "
+    "and list what must be ready to bid. Ask one of those and every number I give you comes from a tool."
+)
+USD_PER_MILLION = {"input": 3.0, "output": 15.0}  # approximate list price, for the cost line only
+SYSTEM = (
+    "You are the Copilot of a bid workbench for a solar developer bidding in SECI's 700 MW C&I-1 tender. "
+    "Answer the question in plain English, in at most five sentences. You have one source of truth: the DATA "
+    "block, which holds numbers computed by the workbook's own formulas and the auction rules. Use only numbers "
+    "that appear in DATA, written the way they appear (tariffs in INR per kWh to two decimals, percentages as "
+    "percents, money in crore). If the question needs a number that is not in DATA, say you do not have it. "
+    "Never invent a figure, a clause, or a rival. Do not give advice beyond what DATA supports."
 )
 RIVALS_FROZEN = (
     "I cannot change what we believe about rivals from here. Rival beliefs are frozen once computed, "
@@ -111,9 +131,60 @@ def _findings_answer(stored: Stored) -> tuple[str, list[Any]]:
     return text, [top, {"paise": [f["impact_inr_per_kwh"] * 100 for f in top]}]
 
 
+def _data_for_model(stored: Stored) -> dict[str, Any]:
+    """The only facts the model may speak from: stored runs and tender facts, nothing it could invent."""
+    findings = sorted(stored.auditor.get("findings") or [], key=lambda f: -abs(f.get("impact_inr_per_kwh") or 0))
+    return {
+        "breakeven_as_received": stored.auditor.get("breakeven_as_received"),
+        "corrected_breakeven": stored.auditor.get("corrected_breakeven"),
+        "recommendation": stored.engine.get("recommendation"),
+        "floor_basis": stored.engine.get("basis"),
+        "drivers": (stored.auditor.get("drivers") or [])[:5],
+        "findings": [
+            {
+                "title": f["title"],
+                "where": f["where"],
+                "severity": f["severity"],
+                "impact_inr_per_kwh": f["impact_inr_per_kwh"],
+            }
+            for f in findings[:8]
+        ],
+        "must_dos": must_dos(stored.facts),
+        "policy": POLICY,
+    }
+
+
+def _llm_answer(message: str, stored: Stored) -> tuple[str, list[Any], float]:
+    """A model words the answer from DATA alone. Grounding still checks every number it writes."""
+    import anthropic
+
+    settings = get_settings()
+    data = _data_for_model(stored)
+    try:
+        client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
+        response = client.messages.create(
+            model=settings.llm_model_smart,
+            max_tokens=400,
+            system=SYSTEM,
+            messages=[{"role": "user", "content": f"DATA:\n{json.dumps(data, default=str)}\n\nQUESTION: {message}"}],
+        )
+    except Exception as exc:  # the model being down must not take the Copilot down
+        log.warning("Copilot model call failed: %s", exc)
+        return CANNOT_ANSWER, [], 0.0
+    text = "".join(block.text for block in response.content if getattr(block, "type", "") == "text").strip()
+    usage = response.usage
+    cost = (usage.input_tokens * USD_PER_MILLION["input"] + usage.output_tokens * USD_PER_MILLION["output"]) / 1e6
+    return (text or CANNOT_ANSWER), [data], cost
+
+
 def answer(message: str, path: str, stored: Stored) -> dict[str, Any]:
-    """The reply, the scenario it created (if any), and the tool outputs every number came from."""
-    text, tools, scenario = "", [], None
+    """The reply, the scenario it created (if any), and the tool outputs every number came from.
+
+    Rules first: what-ifs, rival requests and the common questions are deterministic and need no
+    key. With a key, anything the rules cannot answer goes to the model with the stored results as
+    its only data. Either way, a number that no tool produced never reaches the screen.
+    """
+    text, tools, scenario, cost = "", [], None, 0.0
     lower = message.lower()
     if asks_to_change_rivals(message):
         text = RIVALS_FROZEN
@@ -128,8 +199,10 @@ def answer(message: str, path: str, stored: Stored) -> dict[str, Any]:
         text, tools = _must_do_answer(stored)
     elif any(w in lower for w in ("wrong", "problem", "finding", "bug", "fix", "audit")):
         text, tools = _findings_answer(stored)
+    elif get_settings().llm_mode == "live":
+        text, tools, cost = _llm_answer(message, stored)
     else:
-        text, tools = _recommendation_answer(stored)
+        text, tools = CANNOT_ANSWER, []
 
     loose = ungrounded_numbers(text, tools)
     if loose:
@@ -141,7 +214,7 @@ def answer(message: str, path: str, stored: Stored) -> dict[str, Any]:
         "grounded": grounded,
         "ungrounded": [],
         "withheld": loose,
-        "cost_usd": 0.0,
+        "cost_usd": cost,
     }
 
 

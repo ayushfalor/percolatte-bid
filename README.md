@@ -28,7 +28,9 @@ further down is there if you ever want it, not something the evaluation needs.
 
 No `.env` file and no API key are needed. Without a key the app runs in **offline mode**:
 everything deterministic works fully and AI steps use cached results for the sample files.
-To turn on live AI: `cp .env.example .env`, set `ANTHROPIC_API_KEY`, then `docker compose up -d`.
+To turn on live AI (the Copilot answers free-form questions, tender extraction gets a model pass):
+`cp .env.example .env`, put the key you were given in `ANTHROPIC_API_KEY`, then `docker compose up -d`.
+The key is never in the repo; `.env` is ignored.
 
 Stop with `Ctrl+C` (or `docker compose down`). Wipe the database with `docker compose down -v`.
 
@@ -123,7 +125,7 @@ All optional, set in `.env` (see `.env.example`).
 |---|---|---|
 | `ANTHROPIC_API_KEY` | empty | empty = offline mode |
 | `WEB_PORT` / `API_PORT` | 3000 / 8000 | change if those ports are taken |
-| `LLM_MODEL_SMART` / `LLM_MODEL_FAST` | claude-sonnet-5-5 / claude-haiku-5-5 | models for extraction, research, chat |
+| `LLM_MODEL_SMART` / `LLM_MODEL_FAST` | claude-sonnet-5-5 / claude-haiku-4-5-20251001 | models for extraction, research, chat |
 | `SEED_SAMPLES` | true | load the sample files on first start |
 | `SIM_SEED` | 42 | Monte Carlo seed, so results are reproducible |
 
@@ -187,9 +189,11 @@ Where it breaks:
 ## LLM cost
 
 In offline mode, which is the default and the mode reviewers run, the cost is zero: no call leaves
-the machine. The Auditor, Rival model, Engine and Copilot never call a model at all; their numbers
-come from the formula engine, the rules module and the history, and the Copilot's wording is
-templated from tool outputs.
+the machine. The Auditor, Rival model and Engine never call a model at all; their numbers come from the
+formula engine, the rules module and the history. The Copilot understands what-ifs and the common
+questions by rule with templated wording. With a key it also hands questions the rules cannot answer to
+the model, with the stored run results as its only data, and every number in the reply still has to
+pass the grounding check or the reply is withheld.
 
 The one step that can call a model is tender extraction, and only when `ANTHROPIC_API_KEY` is set.
 It makes one structured call over the RfS pages, verifies every quote by code, fills gaps from the

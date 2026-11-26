@@ -27,7 +27,7 @@ class Settings(BaseSettings):
     database_url: str = "postgresql+psycopg://bidbench:bidbench@localhost:5432/bidbench"
     anthropic_api_key: str = ""
     llm_model_smart: str = "claude-sonnet-5-5"
-    llm_model_fast: str = "claude-haiku-5-5"
+    llm_model_fast: str = "claude-haiku-4-5-20251001"
     seed_samples: bool = True
     samples_dir: str = _default_samples_dir()
     cache_dir: str = str(Path(_default_samples_dir()).parent / "cache")  # LLM outputs keyed by file hash

@@ -155,6 +155,16 @@ def test_must_dos_come_from_tender_facts():
         assert got[key]["clause"], key
 
 
+def test_a_question_it_does_not_understand_is_answered_honestly(samples):
+    """No guessing: the reply says what it can do, creates nothing, and carries no number at all."""
+    from app.agents.copilot import Stored, answer
+
+    reply = answer("What is the weather like in Delhi today?", str(samples / "bid_model.xlsx"), Stored(None, None, []))
+    assert "did not understand" in reply["answer"].lower()
+    assert reply["scenario"] is None and reply["ungrounded"] == [] and reply["withheld"] == []
+    assert not any(ch.isdigit() for ch in reply["answer"]), "a non-answer must not smuggle in a number"
+
+
 # ---------- over HTTP ----------
 
 
