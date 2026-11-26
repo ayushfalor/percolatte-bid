@@ -64,6 +64,15 @@ def test_grounding_tolerance_is_rounding_not_relative():
     assert ungrounded_numbers("2.5", tools) == ["2.5"]
 
 
+def test_grounding_knows_paise_and_identifiers():
+    """37 paise is 0.37 INR/kWh; A-03 and MOCK-2026-036 are names, not quantities."""
+    from app.core.grounding import ungrounded_numbers
+
+    tools = [{"impact_inr_per_kwh": -0.3692, "walk_away": 2.2708}]
+    assert ungrounded_numbers("The ALMM lever is worth 37 paise and rests on A-03; see MOCK-2026-036.", tools) == []
+    assert ungrounded_numbers("That lever is worth 42 paise.", tools) == ["42"]
+
+
 # ---------- what-ifs: understood by rule, in the cell's own unit ----------
 
 

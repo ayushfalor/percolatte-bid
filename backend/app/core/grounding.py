@@ -14,10 +14,11 @@ from typing import Any
 
 TOKEN = re.compile(
     r"(?<![A-Za-z\d.])(?P<prefix>[₹$]\s*|Rs\.?\s*|INR\s*)?(?P<num>\d{1,3}(?:,\d{2,3})+(?:\.\d+)?|\d+(?:\.\d+)?)"
-    r"\s*(?P<unit>%|crores?\b|cr\b|lakhs?\b|bp\b|bps\b|basis points?)?",
+    r"\s*(?P<unit>%|crores?\b|cr\b|lakhs?\b|paise\b|paisa\b|bp\b|bps\b|basis points?)?",
     re.I,
 )
-NOT_A_QUANTITY = re.compile(r"(clause|section|§|annexure|format|page|rfs|no\.?|#)\s*$", re.I)
+NOT_A_QUANTITY = re.compile(r"(clause|section|§|annexure|format|page|rfs|no\.?|#)\s*$|[A-Za-z\d]-$", re.I)
+# The second branch skips identifiers such as A-03, D-010 and MOCK-2026-036: a hyphen after a letter or digit.
 YEAR = range(1900, 2101)
 UNIT_SCALE = {
     "%": (0.01, 1.0),
@@ -49,7 +50,9 @@ def _decimals(text: str) -> int:
 def _matches(candidate: float, decimals: int, pool: list[float]) -> bool:
     """A tool value supports the written number when it rounds to it at the precision written."""
     slack = 10.0 ** (-(decimals + 6))
-    return any(abs(round(t, decimals) - round(candidate, decimals)) < slack for t in pool)
+    # Prose carries the sign in words ("lower by 37 paise"), so a tool's -0.3692 supports "37 paise".
+    target = round(abs(candidate), decimals)
+    return any(abs(round(abs(t), decimals) - target) < slack for t in pool)
 
 
 def _candidates(value: float, unit: str | None, decimals: int) -> list[tuple[float, int]]:
@@ -62,6 +65,8 @@ def _candidates(value: float, unit: str | None, decimals: int) -> list[tuple[flo
     small, big = UNIT_SCALE.get(key, (1.0, 1.0))
     if key == "%":
         return [(value / 100, decimals + 2), (value, decimals)]
+    if key in ("paise", "paisa"):
+        return [(value / 100, decimals + 2), (value, decimals)]  # 37 paise is 0.37 INR/kWh
     return [(value * small, decimals), (value * big, max(decimals - 7, 0))]
 
 
