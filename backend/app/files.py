@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import hashlib
 import os
+import zipfile
 from pathlib import Path
 
 from openpyxl import load_workbook
+from openpyxl.utils.exceptions import InvalidFileException
 
 from .config import get_settings
 
@@ -26,9 +28,18 @@ def detect_kind(filename: str, content: bytes) -> str:
     if ext not in ALLOWED:
         raise ValueError(f"Unsupported file type '{ext}'. Upload .xlsx, .xlsm or .pdf")
     if ext == ".pdf":
+        if not content.lstrip().startswith(b"%PDF"):
+            raise ValueError(
+                f"'{filename}' is not a PDF inside, whatever its name says. Export the tender as a PDF and try again"
+            )
         return "tender"
     path = materialize(sha256(content), ext, content)
-    wb = load_workbook(path, read_only=True)
+    try:
+        wb = load_workbook(path, read_only=True)
+    except (zipfile.BadZipFile, InvalidFileException, KeyError, OSError) as exc:
+        raise ValueError(
+            f"'{filename}' is not an Excel workbook inside, whatever its name says. Save it as .xlsx and try again"
+        ) from exc
     names = {n.lower() for n in wb.sheetnames}
     wb.close()
     lowered = filename.lower()

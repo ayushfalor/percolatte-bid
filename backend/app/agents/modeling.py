@@ -57,7 +57,10 @@ def run(ctx: AgentContext) -> dict[str, Any]:
     irr_cell = ctx.params.get("irr_cell", irr_cell)
     dscr_cell = ctx.params.get("dscr_cell", dscr_cell)
     if not variable or not irr_cell:
-        raise ValueError("Could not find the tariff input or equity IRR output; pass variable and irr_cell")
+        raise ValueError(
+            "Could not find the tariff input (a label containing 'tariff') and the equity IRR output (a label like "
+            "'Equity IRR') in this model. Is this a bid model? If so, pass variable and irr_cell in the run params."
+        )
 
     fixes, levers, basis = _basis(ctx, getattr(doc, "id", None))  # a stand-in document may carry no id
     applied = (fixes if ctx.params.get("apply_fixes", True) else []) + (

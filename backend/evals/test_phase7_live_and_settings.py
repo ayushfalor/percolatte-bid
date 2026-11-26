@@ -237,6 +237,15 @@ def test_the_plant_type_comes_from_the_models_own_words(samples, wind_workbook):
     assert detect_technology(str(wind_workbook[0])) == "wind"
 
 
+def test_a_file_that_is_not_what_its_name_says_is_refused_in_plain_words():
+    from app.files import detect_kind
+
+    with pytest.raises(ValueError, match="not an Excel workbook"):
+        detect_kind("model.xlsx", b"\x00garbage" * 50)
+    with pytest.raises(ValueError, match="not a PDF"):
+        detect_kind("tender.pdf", b"hello")
+
+
 # ---------- the tender in plain words ----------
 
 
@@ -317,3 +326,46 @@ def test_a_saved_scenario_can_be_rerun(api_client):
     ).json()
     run = api_client.post(f"/api/scenarios/{sc['id']}/run")
     assert run.status_code == 202 and run.json()["params"]["scenario_id"] == sc["id"]
+
+
+def test_the_template_check_accepts_every_real_model_and_refuses_a_grocery_list(samples, wind_workbook, tmp_path):
+    """Template-free in layout: the sample and the unseen wind model both pass. A list of groceries does not."""
+    from openpyxl import Workbook
+
+    from app.core.template import check_bid_model
+
+    for path in (samples / "bid_model.xlsx", wind_workbook[0]):
+        check = check_bid_model(str(path))
+        assert check.ok and check.found["tariff"] and check.found["equity_irr"], (path, check.message)
+        assert check.message.startswith("Accepted")
+    wb = Workbook()
+    ws = wb.active
+    for i, (item, qty) in enumerate([("Milk", 2), ("Eggs", 12), ("Total", "=SUM(B1:B2)")], start=1):
+        ws.cell(i, 1, item)
+        ws.cell(i, 2, qty)
+    path = tmp_path / "grocery.xlsx"
+    wb.save(path)
+    check = check_bid_model(str(path))
+    assert not check.ok and check.missing == ["A tariff input", "An equity IRR result"]
+    assert "1 sheet(s) and 1 formula(s)" in check.message and "template" in check.message
+
+
+@pytest.mark.stack
+def test_a_workbook_that_is_not_a_bid_model_is_refused_at_upload_with_the_template(api_client, tmp_path):
+    from openpyxl import Workbook
+
+    wb = Workbook()
+    ws = wb.active
+    ws.cell(1, 1, "Milk")
+    ws.cell(1, 2, 2)
+    path = tmp_path / "grocery.xlsx"
+    wb.save(path)
+    with path.open("rb") as fh:
+        res = api_client.post("/api/documents", files={"file": ("grocery.xlsx", fh)})
+    assert res.status_code == 422, res.text
+    detail = res.json()["detail"]
+    assert "tariff" in detail["message"].lower() and detail["template"] == "/api/template"
+    assert detail["missing"] == ["A tariff input", "An equity IRR result"]
+    template = api_client.get("/api/template")
+    assert template.status_code == 200 and template.content[:2] == b"PK"
+    assert api_client.get("/api/template/requirements").json()["requirements"][0]["key"] == "tariff"

@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { type Agent, type Doc, type Health, type LlmSetting, type Run, api } from "../api";
+import { type Agent, type Doc, type Health, type LlmSetting, type Run, type UploadRefusal, UploadRefused, api } from "../api";
 import { useLive } from "../hooks";
 import type { Progress } from "../status";
 
@@ -48,6 +48,8 @@ export function Setup({
 }) {
   const fileInput = useRef<HTMLInputElement>(null);
   const [note, setNote] = useState<string | null>(null);
+  const [refusal, setRefusal] = useState<UploadRefusal | null>(null);
+  const reqs = useLive(() => api.requirements(), 0);
   const runsLive = useLive(() => api.runs("limit=60"), 1500);
   const list = runsLive.data ?? runs;
   const pending = list.filter((r) => r.status === "queued" || r.status === "running").length;
@@ -61,6 +63,11 @@ export function Setup({
       setNote(res.created ? `${file.name} added. It is being read, checked and priced; the ticks fill in as each step finishes.` : `${file.name} was already loaded.`);
       if (res.document?.id) onUploaded(res.document.id);
     } catch (e) {
+      if (e instanceof UploadRefused) {
+        setNote(null);
+        setRefusal(e.refusal);
+        return;
+      }
       setNote((e as Error).message);
     }
   }
@@ -91,6 +98,16 @@ export function Setup({
             <input ref={fileInput} type="file" accept=".xlsx,.xlsm,.pdf" hidden onChange={(e) => e.target.files?.[0] && upload(e.target.files[0])} />
           </p>
           {note && <p className="note">{note}</p>}
+          <details className="needs">
+            <summary>What a bid model needs, and the template</summary>
+            <p>Any layout works: sheets, rows and names can be yours. The app finds its cells by their labels, so a model must have these next to the right cells. A file without the required ones is refused at upload and told what is missing.</p>
+            <ul>
+              {(reqs.data?.requirements ?? []).map((r) => (
+                <li key={r.key}><b>{r.title}</b>{r.required ? "" : " (optional)"}: {r.how}.</li>
+              ))}
+            </ul>
+            <p><a className="button" href="/api/template" download="bid_model_template.xlsx">Download the template (.xlsx)</a> <span className="note">It is the sample model: copy its labels, or fill it with your own numbers.</span></p>
+          </details>
           <table>
             <thead><tr><th>File</th><th>What it is</th><th className="num">Size</th></tr></thead>
             <tbody>
@@ -118,6 +135,23 @@ export function Setup({
       </section>
 
       <LiveAi health={health} />
+      {refusal && (
+        <div className="modal-backdrop" role="presentation" onClick={() => setRefusal(null)}>
+          <div className="modal" role="dialog" aria-modal="true" aria-labelledby="refused-title" onClick={(e) => e.stopPropagation()}>
+            <h2 id="refused-title">This file was not accepted</h2>
+            <p>{refusal.message}</p>
+            {refusal.missing.length > 0 && (
+              <ul>
+                {refusal.missing.map((m) => <li key={m}>Missing: {m}</li>)}
+              </ul>
+            )}
+            <p className="levers">
+              <a className="button" href={refusal.template} download="bid_model_template.xlsx">Download the template</a>
+              <button className="ghost" onClick={() => setRefusal(null)}>Close</button>
+            </p>
+          </div>
+        </div>
+      )}
 
       <details className="engineer">
         <summary>Details for engineers: every run and every agent</summary>

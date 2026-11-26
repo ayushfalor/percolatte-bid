@@ -2,6 +2,7 @@ import { type Brief as BriefT, type Doc, api, inr, paise } from "../api";
 import { useLive } from "../hooks";
 
 const AGENT_DOC: Record<string, "workbook" | "history"> = { auditor: "workbook", engine: "workbook", rival: "history" };
+const AGENT_NAME: Record<string, string> = { auditor: "Auditor", rival: "Rival model", engine: "Engine" };
 const MUST_DO_NAMES: Record<string, string> = { emd: "EMD", pbg: "PBG", success_charge: "Success charge", net_worth: "Net worth" };
 
 export function Brief({ workbook, docs }: { workbook: Doc; docs: Doc[] }) {
@@ -26,11 +27,14 @@ export function Brief({ workbook, docs }: { workbook: Doc; docs: Doc[] }) {
       </section>
       {b.basis.length > 0 && <p className="note">Floor computed on: {b.basis.join("; ")}.</p>}
       {b.reasons.length > 0 && <ul className="reasons">{b.reasons.map((r) => <li key={r}>{r}</li>)}</ul>}
-      {b.pending.length > 0 && (
-        <p className="alert">
-          Waiting on: {b.pending.join(", ")}.{" "}
-          {b.pending.map((k) => (
-            <button key={k} className="ghost" onClick={() => start(k)}>Run {k}</button>
+      {Object.entries(b.problems ?? {}).map(([k, why]) => (
+        <p key={k} className="alert">The {AGENT_NAME[k] ?? k} could not work on this model: {why} <button className="ghost" onClick={() => start(k)}>Try again</button></p>
+      ))}
+      {b.pending.filter((k) => !(b.problems ?? {})[k]).length > 0 && (
+        <p className="note">
+          Still working: {b.pending.filter((k) => !(b.problems ?? {})[k]).map((k) => AGENT_NAME[k] ?? k).join(", ")}. This fills in by itself.{" "}
+          {b.pending.filter((k) => !(b.problems ?? {})[k]).map((k) => (
+            <button key={k} className="ghost" onClick={() => start(k)}>Run {AGENT_NAME[k] ?? k} now</button>
           ))}
         </p>
       )}

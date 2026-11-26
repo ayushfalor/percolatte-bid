@@ -78,13 +78,17 @@ we have met.
 
 ## Try your own files
 
-- In the UI: **Upload a file** (.xlsx, .xlsm or .pdf).
+- In the UI: **Upload a file** (.xlsx, .xlsm or .pdf). Any layout works, but a bid model must have a
+  tariff input and an equity IRR result the app can find by their labels; Setup lists the labels under
+  "What a bid model needs" and offers the sample model as a template to download. A file that does not
+  fit is refused on the spot with a popup saying what is missing, and never reaches the agents.
 - From a terminal: `bash scripts/try-workbook.sh path/to/model.xlsx` prints what the app understood.
 - API reference: http://localhost:8000/docs. The deterministic tools need no queue and no AI:
 
 | Endpoint | What it does |
 |---|---|
 | `POST /api/documents` | upload a file (deduplicated by hash), queues the Reader |
+| `GET /api/template`, `GET /api/template/requirements` | the sample model as a template to download; what a model must contain |
 | `GET /api/workbooks/{id}/structure` | sheets, named ranges, labelled inputs, unused numbers, legacy sheets |
 | `GET /api/workbooks/{id}/parity` | recomputes every formula and compares with the values Excel saved |
 | `POST /api/workbooks/{id}/evaluate` | recalculate with overrides, e.g. `{"overrides": {"Tariff": 2.5}, "outputs": ["Returns!C8"]}` |

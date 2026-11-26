@@ -20,7 +20,7 @@ from ..db import SessionLocal
 from ..files import materialize
 from ..models import Document, Run, Scenario
 from ..schemas import BriefOut, ChatIn, ChatOut
-from .deps import latest_run, latest_snapshot, latest_tender_facts, workbook_document
+from .deps import latest_failure, latest_run, latest_snapshot, latest_tender_facts, workbook_document
 
 router = APIRouter(prefix="/api", tags=["copilot"])
 TOP_DRIVERS = 3
@@ -117,6 +117,9 @@ def brief(document_id: uuid.UUID):
     rival = latest_run("rival")
     facts = latest_tender_facts()
     pending = [kind for kind, run in (("auditor", auditor), ("rival", rival), ("engine", engine)) if run is None]
+    problems = {
+        kind: why for kind in pending if (why := latest_failure(kind, None if kind == "rival" else doc.id)) is not None
+    }
 
     audit = (auditor or {}).get("result") or {}
     findings = [_finding(f) for f in audit.get("findings", [])]
@@ -140,4 +143,5 @@ def brief(document_id: uuid.UUID):
             kind: str(run["id"]) for kind, run in (("auditor", auditor), ("rival", rival), ("engine", engine)) if run
         },
         pending=pending,
+        problems=problems,
     )

@@ -40,6 +40,7 @@ export type Brief = {
   snapshot_id: string | null;
   sources: Record<string, string>;
   pending: string[];
+  problems: Record<string, string>;
 };
 
 export type Fix = { overrides: Record<string, unknown>; formula_patches: Record<string, string>; note: string };
@@ -151,6 +152,8 @@ export type LiveRead = {
   caveats: string[];
   snapshot_id: string;
 };
+export type Requirement = { key: string; title: string; how: string; required: boolean };
+export type UploadRefusal = { message: string; missing: string[]; template: string };
 export type AssumptionRow = { id: string; assumption: string; value: string; source: string; used_by: string; change_in: string };
 
 async function call<T>(path: string, init?: RequestInit): Promise<T> {
@@ -195,16 +198,30 @@ export const api = {
   setLlm: (secret: string) => post<LlmSetting>("/api/settings/llm", { secret }),
   clearLlm: () => call<LlmSetting>("/api/settings/llm", { method: "DELETE" }),
   tenderPlain: () => call<TenderPlain>("/api/tender/plain"),
+  requirements: () => call<{ requirements: Requirement[]; download: string }>("/api/template/requirements"),
   goalSeek: (docId: string, variable: string, target: string, targetValue: number) =>
     post<GoalSeek>(`/api/workbooks/${docId}/goal-seek`, { variable, target, target_value: targetValue }),
   upload: async (file: File) => {
     const form = new FormData();
     form.append("file", file);
     const res = await fetch("/api/documents", { method: "POST", body: form });
-    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).detail ?? res.statusText);
+    if (!res.ok) {
+      const detail = (await res.json().catch(() => ({}))).detail;
+      // A refusal against the template comes back structured, so the screen can show a proper message.
+      if (detail && typeof detail === "object") throw new UploadRefused(detail as UploadRefusal);
+      throw new Error(typeof detail === "string" ? detail : res.statusText);
+    }
     return res.json();
   },
 };
+
+export class UploadRefused extends Error {
+  refusal: UploadRefusal;
+  constructor(refusal: UploadRefusal) {
+    super(refusal.message);
+    this.refusal = refusal;
+  }
+}
 
 export const inr = (v: number | null | undefined, digits = 2) => (v == null ? "n/a" : `₹${v.toFixed(digits)}`);
 export const pct = (v: number | null | undefined, digits = 0) => (v == null ? "n/a" : `${(v * 100).toFixed(digits)}%`);

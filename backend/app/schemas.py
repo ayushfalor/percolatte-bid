@@ -140,6 +140,7 @@ class BriefOut(BaseModel):
     snapshot_id: str | None
     sources: dict[str, Any]  # which run each block came from, so every number is one click from its origin
     pending: list[str]  # agent runs that have not finished yet, so the UI can say what is still coming
+    problems: dict[str, str] = Field(default_factory=dict)  # pending kinds whose latest run failed, with the reason
 
 
 class LlmSettingIn(BaseModel):

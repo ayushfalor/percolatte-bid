@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import uuid
 from dataclasses import asdict
 
@@ -101,3 +102,15 @@ def latest_snapshot(regime: str) -> RivalSnapshot | None:
     if not stored:
         return None
     return RivalSnapshot(**{**stored, "profiles": [RivalProfile(**p) for p in stored["profiles"]]})
+
+
+def latest_failure(kind: str, document_id: uuid.UUID | None = None) -> str | None:
+    """The first line of the most recent failed run's error, when no run of this kind has succeeded since."""
+    with SessionLocal() as session:
+        q = select(Run).where(Run.kind == kind, Run.status.in_(("succeeded", "failed")))
+        if document_id is not None:
+            q = q.where(Run.document_id == document_id)
+        run = session.scalars(q.order_by(Run.finished_at.desc()).limit(1)).first()
+        if run is None or run.status != "failed":
+            return None
+        return re.sub(r"^\w+Error: ", "", (run.error or "failed").splitlines()[0])

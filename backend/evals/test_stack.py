@@ -73,5 +73,9 @@ def test_async_engine_run(client):
 def test_rejects_bad_input_cleanly(client):
     r = client.post("/api/documents", files={"file": ("notes.txt", b"hello")})
     assert r.status_code == 415
+    r = client.post("/api/documents", files={"file": ("model.xlsx", b"\x00garbage" * 50)})
+    assert r.status_code == 415 and "not an Excel workbook" in r.json()["detail"]
+    r = client.post("/api/documents", files={"file": ("tender.pdf", b"hello, not a pdf")})
+    assert r.status_code == 415 and "not a PDF" in r.json()["detail"]
     r = client.post("/api/runs", json={"kind": "nope"})
     assert r.status_code == 400
