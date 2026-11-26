@@ -90,7 +90,9 @@ def _solar_ists(tenders: pd.DataFrame, bids: pd.DataFrame, name_col: str) -> dic
     for name, g in solar.groupby("group"):
         finals = [float(v) for v in g[FINAL].dropna()]
         at_l1 = sum(
-            1 for tid, f in zip(g["Tender ID"], g[FINAL], strict=True) if pd.notna(f) and abs(float(f) - l1.get(tid, -1)) < 1e-9
+            1
+            for tid, f in zip(g["Tender ID"], g[FINAL], strict=True)
+            if pd.notna(f) and abs(float(f) - l1.get(tid, -1)) < 1e-9
         )
         groups[str(name)] = {
             "tenders": sorted(g["Tender ID"].unique().tolist()),
