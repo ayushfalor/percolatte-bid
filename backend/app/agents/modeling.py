@@ -7,9 +7,12 @@ rival snapshot using core.auction_rules, then the price ladder.
 
 from __future__ import annotations
 
+from dataclasses import asdict
 from typing import Any
 
+from ..core.contracts import RivalProfile, RivalSnapshot
 from ..core.excel_engine import get_engine
+from ..core.simulate import price_ladder, recommend
 from ..core.workbook_reader import key_cells
 from . import AgentContext, agent
 
@@ -51,12 +54,37 @@ def run(ctx: AgentContext) -> dict[str, Any]:
 
     hurdle = float(ctx.params.get("hurdle", 0.14))
     seek = eng.goal_seek(variable, irr_cell, hurdle, overrides=overrides)
-    return {
+    dscr_floor = float(ctx.params.get("dscr_floor", 1.20))  # A-02
+    dscr_seek = eng.goal_seek(variable, dscr_cell, dscr_floor, overrides=overrides) if dscr_cell else None
+    result: dict[str, Any] = {
         "variable": eng.normalize_ref(variable),
         "irr_cell": eng.normalize_ref(irr_cell),
         "dscr_cell": eng.normalize_ref(dscr_cell) if dscr_cell else None,
         "hurdle": hurdle,
         "breakeven_tariff": seek.value,
+        "dscr_tariff": dscr_seek.value if dscr_seek and dscr_seek.converged else None,
         "curve": points,
-        "next": "Monte Carlo win odds against the frozen rival snapshot (not built yet)",
+    }
+    result.update(_ladder(ctx, points, seek.value, result["dscr_tariff"]))
+    return result
+
+
+def _ladder(
+    ctx: AgentContext, curve: list[dict[str, Any]], hurdle_tariff: float | None, dscr_tariff: float | None
+) -> dict[str, Any]:
+    """Win odds and the three numbers, if a rival snapshot exists. Rivals do not see our costs."""
+    rival = ctx.latest_result("rival") or {}
+    regime = str(ctx.params.get("regime", "almm_40"))
+    stored = rival.get("snapshots", {}).get(regime)
+    if not stored or hurdle_tariff is None:
+        return {"ladder": [], "recommendation": None, "snapshot_id": None, "why_no_ladder": "no rival run yet"}
+    snapshot = RivalSnapshot(**{**stored, "profiles": [RivalProfile(**p) for p in stored["profiles"]]})
+    ctx.progress(0.9, f"Playing the auction 5,000 times at every price ({regime})")
+    ladder = price_ladder(snapshot, curve, our_mw=float(ctx.params.get("our_mw", 200)))
+    rec = recommend(ladder, hurdle_tariff=hurdle_tariff, dscr_tariff=dscr_tariff)
+    return {
+        "ladder": [asdict(p) for p in ladder],
+        "recommendation": asdict(rec),
+        "snapshot_id": snapshot.id,
+        "regime": regime,
     }

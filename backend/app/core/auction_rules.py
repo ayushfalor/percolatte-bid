@@ -187,3 +187,59 @@ def allocate(bids: list[Bid], eligible_mw: float) -> Allocation:
             )
     out.awarded_mw = filled
     return out
+
+
+# ---------- the same rules, vectorised over thousands of simulated auctions ----------
+
+
+def truncate_paise_array(x):
+    """§39.3 for arrays."""
+    import numpy as np
+
+    return np.floor(np.round(x * 100, 6)) / 100
+
+
+def settle_field(part, floors, mw, openings, our_price: float, our_mw: float = 200.0, tendered_mw: float = 700.0):
+    """Ladder mode: if we end at `our_price`, what do we win in each simulated auction?
+
+    Arrays are (draws, rivals). Rivals end at their floor, the lowest they would go; we end at
+    our price and lose ties, since the rival was there first (§41.2.c). The sealed stage uses the
+    opening bids: the unique highest bidder goes if 0.8 x the rest still covers the tender and at
+    least three remain (§40.2), whoever that bidder is. Then the field fills SE = min(0.8 x ST,
+    700) from L1 up, inside L1 + 2% (§41), partial awards rounded down to 10 MW and never below
+    50 MW (§41.3). Same rules as `shortlist_for_era` and `allocate`; a test proves it.
+    """
+    import numpy as np
+
+    part = part.astype(bool)
+    n_rivals = part.sum(axis=1)
+    rival_mw = np.where(part, mw, 0.0)
+    st = rival_mw.sum(axis=1) + our_mw
+
+    # Sealed stage (§40.2): who is the unique H1, and does the rule bite?
+    opens = np.where(part, openings, -np.inf)
+    rival_high = opens.max(axis=1)
+    rule_bites_if_we_go = (ELIGIBLE_SHARE * (st - our_mw) > tendered_mw) & (n_rivals >= MIN_SHORTLIST)
+    we_are_h1 = (our_price > rival_high + 1e-9) & rule_bites_if_we_go
+    rival_is_h1 = (rival_high > our_price + 1e-9)[:, None] & (opens == rival_high[:, None])
+    unique = rival_is_h1.sum(axis=1) == 1
+    rival_h1_mw = np.where(rival_is_h1, mw, 0.0).sum(axis=1)
+    # With that rival gone, n_rivals bidders remain (the others plus us); at least three must.
+    rival_goes = unique & (ELIGIBLE_SHARE * (st - rival_h1_mw) > tendered_mw) & (n_rivals >= MIN_SHORTLIST)
+    part = part & ~(rival_is_h1 & rival_goes[:, None])
+    rival_mw = np.where(part, mw, 0.0)
+    st = rival_mw.sum(axis=1) + our_mw
+    se = np.minimum(ELIGIBLE_SHARE * st, tendered_mw)
+
+    # Settlement (§41): rivals at their floors, us at our price, ties go to them.
+    f = np.where(part, floors, np.inf)
+    l1 = np.minimum(f.min(axis=1), our_price)
+    in_band = our_price <= truncate_paise_array(l1 * (1 + BAND)) + 1e-9
+    ahead = np.where(part & (truncate_paise_array(floors) <= truncate_paise(our_price) + 1e-9), mw, 0.0).sum(axis=1)
+    room = np.maximum(se - ahead, 0.0)
+    full = room >= our_mw - 1e-9
+    partial = np.floor(room / STEP_MW) * STEP_MW
+    partial_ok = ~full & (partial >= MIN_PROJECT_MW)
+    win_mw = np.where(full, our_mw, np.where(partial_ok, partial, 0.0))
+    win_mw = np.where(in_band & ~we_are_h1, win_mw, 0.0)
+    return {"win_mw": win_mw, "h1_eliminated": we_are_h1, "in_band": in_band, "eligible_mw": se}

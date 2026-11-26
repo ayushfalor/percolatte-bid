@@ -73,7 +73,7 @@ browser ──> web (nginx + React) ──> api (FastAPI) ──> db (Postgres 1
 | Auditor | Model bugs and tender-vs-model mismatches, each fix priced in INR/kWh | built (tender mismatches need Phase 2 facts) |
 | Scout | Web research on rivals, facts with URL and date | planned |
 | Rival model | Per rival: chance of bidding at each price, and why. Frozen once computed | built (calibrated on history, three regimes) |
-| Engine | Win odds and profit at every price point, and how they move with inputs | economics curve built |
+| Engine | Win odds and profit at every price point, and how they move with inputs | built (price ladder, three numbers, replay) |
 | Copilot | Chat: what-ifs become scenarios, the engine reruns | planned |
 
 **Database: three tables.** `documents` (files, bytes stored in the row), `runs` (every agent
@@ -130,7 +130,8 @@ Where it breaks:
 - Functions the formula library lacks (OFFSET, INDIRECT on a built string) are reported by cell; numbers that depend on them are withheld, not guessed.
 - Scanned PDFs need OCR, which is not built. Clause numbers on tender facts are best effort.
 - The Scout (web research on rivals) is not built; rival names are the history's grouped labels.
-- The price ladder, the copilot and deployment (phases 4 to 6) are not built.
+- The copilot, the UI screens and deployment (phases 5 and 6) are not built.
+- The economics curve does not carry equity value in crore yet, so expected value in crore needs a caller to supply npv_cr.
 
 TODO before submitting.
 
