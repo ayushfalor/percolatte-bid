@@ -17,7 +17,8 @@ from .workbook_reader import hurdle_for, key_cells, read_structure
 
 SWING = 0.10  # how far each driver is moved either way, as a share of its own value
 SLOPE_STEP = 0.02  # tariff step used to measure the local IRR slope
-EXACT_ROWS = 3  # how many of the top drivers get a real goal seek instead of the estimate
+EXACT_ROWS = 0  # drivers that get a real goal seek on top of the estimate; zero keeps the tornado
+# under its budget on a slow runner, and corrected_breakeven is the number that must be exact (1b item 4)
 FLAT = 1e-6  # a swing at or below this is no swing at all, in INR/kWh
 BRACKET = 0.25  # INR/kWh either side of the estimate, handed to the solver so it skips its own search
 SEVERITY_ORDER = {"high": 0, "medium": 1, "low": 2, "info": 3}
@@ -237,7 +238,8 @@ def tornado(
 
     Goal seeking every input would cost a full solve each. Instead we price each input with two
     recalculations at today's tariff and convert the IRR it moves into a tariff using the local
-    slope, then goal seek the few that come out on top so the numbers we show are exact.
+    slope. Rows carry exact=False to say so; the corrected breakeven, the number a bid rests on,
+    is still solved exactly. EXACT_ROWS can buy exact goal seeks for the top rows when time allows.
     """
     target_irr = _hurdle(path, target_irr)
     engine = engine_for(path)
