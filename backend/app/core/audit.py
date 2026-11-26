@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 from typing import Any
 
 from openpyxl import load_workbook
@@ -12,7 +13,7 @@ from .contracts import Finding, Fix
 from .excel_engine import EngineError
 from .model_map import formula_runs
 from .patching import engine_for, file_hash, merge
-from .workbook_reader import key_cells, read_structure
+from .workbook_reader import hurdle_for, key_cells, read_structure
 
 SWING = 0.10  # how far each driver is moved either way, as a share of its own value
 SLOPE_STEP = 0.02  # tariff step used to measure the local IRR slope
@@ -20,6 +21,7 @@ EXACT_ROWS = 3  # how many of the top drivers get a real goal seek instead of th
 FLAT = 1e-6  # a swing at or below this is no swing at all, in INR/kWh
 BRACKET = 0.25  # INR/kWh either side of the estimate, handed to the solver so it skips its own search
 SEVERITY_ORDER = {"high": 0, "medium": 1, "low": 2, "info": 3}
+GRAPH_BASED = {"orphan_input", "cosmetic_input", "legacy_sheet"}  # findings that rest on "nothing reads this"
 CHECKS = (
     checks.typed_over_findings,
     checks.truncated_range_findings,
@@ -36,19 +38,33 @@ class AuditError(ValueError):
     """The workbook does not give us what we need to price anything."""
 
 
-def _seek_cells(path: str, engine) -> tuple[str, str]:
-    """The tariff input to move and the equity IRR to hit."""
-    cells = key_cells(path, engine.defined_names)
-    variable, target = cells["tariff"], cells["equity_irr"]
-    if not variable or not target:
-        raise AuditError("Could not find a tariff input and an equity IRR output in this workbook")
-    return variable, target
+def _seek_cells(path: str, engine, cells: dict[str, str] | None = None) -> tuple[str, str]:
+    """The tariff input to move and the equity IRR to hit. Explicit `cells` win over labels."""
+    found = {**key_cells(path, engine.defined_names), **(cells or {})}
+    missing = [
+        f"the {name} ({hint})"
+        for key, name, hint in (
+            ("tariff", "tariff input", "a label containing 'tariff', or a defined name Tariff"),
+            ("equity_irr", "equity IRR output", "a label like 'Equity IRR' or 'IRR to equity'"),
+        )
+        if not found.get(key)
+    ]
+    if missing:
+        raise AuditError(
+            "Could not find " + " and ".join(missing) + ". Pass the cells explicitly, for example "
+            "tariff_cell='Inputs!C12' and irr_cell='Returns!C8'."
+        )
+    return found["tariff"], found["equity_irr"]
 
 
-def _model(path: str, target_irr: float) -> checks.Model:
+def _hurdle(path: str, target_irr: float | None) -> float:
+    return hurdle_for(path) if target_irr is None else target_irr
+
+
+def _model(path: str, target_irr: float, cells: dict[str, str] | None = None) -> checks.Model:
     """Read the workbook once and hand every check the same picture of it."""
     engine = engine_for(path)
-    base = breakeven_with_fixes(path, [], target_irr=target_irr)
+    base = breakeven_with_fixes(path, [], target_irr=target_irr, cells=cells)
 
     untrusted = {cell for cells in engine.unsupported.values() for cell in cells}
 
@@ -57,7 +73,7 @@ def _model(path: str, target_irr: float) -> checks.Model:
         if untrusted & set(fix.touches):
             return None
         try:
-            return breakeven_with_fixes(path, [fix], target_irr=target_irr) - base
+            return breakeven_with_fixes(path, [fix], target_irr=target_irr, cells=cells) - base
         except (AuditError, EngineError, ValueError):
             return None
 
@@ -69,23 +85,36 @@ def _model(path: str, target_irr: float) -> checks.Model:
         value_of=engine.current_value,
         price=price,
         breakeven=base,
-        tariff=engine.normalize_ref(_seek_cells(path, engine)[0]),
+        tariff=engine.normalize_ref(_seek_cells(path, engine, cells)[0]),
         unsupported=engine.unsupported,
         cycle_report=engine.cycle_report,
     )
 
 
-def audit_workbook(path: str, tender_facts: list[Any] | None = None, target_irr: float = 0.14) -> list[Finding]:
+def audit_workbook(
+    path: str,
+    tender_facts: list[Any] | None = None,
+    target_irr: float | None = None,
+    cells: dict[str, str] | None = None,
+) -> list[Finding]:
     """Return every finding, each with evidence, severity, INR/kWh impact and a fix-as-scenario.
 
     Must work on any workbook (no hardcoded cells). Checks: hardcode inside a formula row,
     truncated ranges vs sibling aggregates, unused inputs, cosmetic inputs, stale notes,
     whole-number percents, legacy sheets, and (with tender facts) tender-vs-model mismatches.
     """
-    model = _model(path, target_irr)
+    model = _model(path, _hurdle(path, target_irr), cells)
     findings = [finding for check in CHECKS for finding in check(model)]
     findings.extend(checks.tender_findings(model, tender_facts or []))
+    dynamic = checks.dynamic_references(model.book)
+    if dynamic:
+        findings = [_hedged(f) if f.id in GRAPH_BASED else f for f in findings]
     return sorted(findings, key=_worst_first)
+
+
+def _hedged(finding: Finding) -> Finding:
+    """A graph-based finding on a workbook whose graph cannot be trusted is information, not a bug."""
+    return replace(finding, severity="info", evidence=finding.evidence + checks.DYNAMIC_NOTE)
 
 
 def _worst_first(finding: Finding) -> tuple[int, float, str]:
@@ -97,19 +126,22 @@ _solved: dict[str, float] = {}
 _SOLVED_MAX = 256
 
 
-def breakeven_with_fixes(path: str, fixes: list[Fix], target_irr: float = 0.14) -> float:
+def breakeven_with_fixes(
+    path: str, fixes: list[Fix], target_irr: float | None = None, cells: dict[str, str] | None = None
+) -> float:
     """Breakeven tariff with these fixes applied to a temporary copy. Never writes to `path`.
 
     The answer is a pure function of the file, the fixes and the hurdle, so it is remembered.
     An audit prices every fix and the corrected breakeven then applies a subset of the same
     fixes, which would otherwise solve the same thing twice.
     """
+    target_irr = _hurdle(path, target_irr)
     overrides, patches = merge(fixes)
-    key = json.dumps([file_hash(path), patches, overrides, target_irr], sort_keys=True, default=str)
+    key = json.dumps([file_hash(path), patches, overrides, target_irr, cells], sort_keys=True, default=str)
     if key in _solved:
         return _solved[key]
     engine = engine_for(path, patches)
-    variable, target = _seek_cells(path, engine)
+    variable, target = _seek_cells(path, engine, cells)
     result = engine.goal_seek(variable, target, target_irr, overrides=overrides)
     if not result.converged:
         raise AuditError(f"No tariff reaches {target_irr:.0%} on {target}: {result.message}")
@@ -119,7 +151,12 @@ def breakeven_with_fixes(path: str, fixes: list[Fix], target_irr: float = 0.14) 
     return result.value
 
 
-def corrected_breakeven(path: str, tender_facts: list[Any] | None = None, target_irr: float = 0.14) -> float:
+def corrected_breakeven(
+    path: str,
+    tender_facts: list[Any] | None = None,
+    target_irr: float | None = None,
+    cells: dict[str, str] | None = None,
+) -> float:
     """Breakeven tariff after applying every fix that is certain from the model or the tender.
 
     A fix is excluded when its impact rests on an assumed number (the finding carries
@@ -129,13 +166,16 @@ def corrected_breakeven(path: str, tender_facts: list[Any] | None = None, target
     Pass the tender facts to include the model-versus-tender fixes. Without them this is the
     model checked against itself, which is all we can honestly do with no tender in hand.
     """
-    findings = audit_workbook(path, tender_facts=tender_facts, target_irr=target_irr)
-    return corrected_breakeven_from(path, findings, target_irr=target_irr)
+    findings = audit_workbook(path, tender_facts=tender_facts, target_irr=target_irr, cells=cells)
+    return corrected_breakeven_from(path, findings, target_irr=target_irr, cells=cells)
 
 
-def corrected_breakeven_from(path: str, findings: list[Finding], target_irr: float = 0.14) -> float:
+def corrected_breakeven_from(
+    path: str, findings: list[Finding], target_irr: float | None = None, cells: dict[str, str] | None = None
+) -> float:
     """The same number from findings already in hand, so a caller does not audit twice."""
-    return breakeven_with_fixes(path, [f.fix for f in findings if _is_certain(f)], target_irr=target_irr)
+    certain = [f.fix for f in findings if _is_certain(f)]
+    return breakeven_with_fixes(path, certain, target_irr=target_irr, cells=cells)
 
 
 def _is_certain(finding: Finding) -> bool:
@@ -188,7 +228,9 @@ def _exact_breakeven(
     raise AuditError(f"Could not solve the breakeven with {cell} at {value}")
 
 
-def tornado(path: str, top_n: int = 8, target_irr: float = 0.14) -> list[dict[str, Any]]:
+def tornado(
+    path: str, top_n: int = 8, target_irr: float | None = None, cells: dict[str, str] | None = None
+) -> list[dict[str, Any]]:
     """Which inputs move the breakeven most: [{"cell", "label", "low", "high", "swing"}], sorted by swing.
 
     Labels come from the row text or the column header, whichever names the input.
@@ -197,13 +239,14 @@ def tornado(path: str, top_n: int = 8, target_irr: float = 0.14) -> list[dict[st
     recalculations at today's tariff and convert the IRR it moves into a tariff using the local
     slope, then goal seek the few that come out on top so the numbers we show are exact.
     """
+    target_irr = _hurdle(path, target_irr)
     engine = engine_for(path)
-    variable, target = _seek_cells(path, engine)
+    variable, target = _seek_cells(path, engine, cells)
     variable_cell = engine.normalize_ref(variable)
     base_tariff = float(engine.current_value(variable))
     base_irr = engine.evaluate({}, [target])[target]
     slope = _breakeven_slope(engine, variable, target, base_tariff)
-    base_breakeven = breakeven_with_fixes(path, [], target_irr=target_irr)
+    base_breakeven = breakeven_with_fixes(path, [], target_irr=target_irr, cells=cells)
 
     rows: list[dict[str, Any]] = []
     for driver in _drivers(path, variable_cell):

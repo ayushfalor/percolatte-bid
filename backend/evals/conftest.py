@@ -134,6 +134,24 @@ def edge_typed_over_workbook(tmp_path_factory):
 
 
 @pytest.fixture(scope="session")
+def dynamic_refs_workbook(tmp_path_factory):
+    """A model with INDIRECT on a built string, so the static graph cannot be trusted."""
+    from evals.fixtures.make_workbooks import make_wind_dynamic_refs
+
+    path = tmp_path_factory.mktemp("unseen") / "wind_dynamic.xlsx"
+    return path, make_wind_dynamic_refs(str(path))
+
+
+@pytest.fixture(scope="session")
+def renamed_workbook(tmp_path_factory):
+    """Nothing called by the names we first looked for, and no named ranges."""
+    from evals.fixtures.make_workbooks import make_renamed_labels
+
+    path = tmp_path_factory.mktemp("unseen") / "renamed.xlsx"
+    return path, make_renamed_labels(str(path))
+
+
+@pytest.fixture(scope="session")
 def api_url() -> str:
     url = os.environ.get("API_URL")
     if not url:

@@ -682,3 +682,128 @@ def make_wind_typed_over_edges(path: str) -> dict:
         "breakeven_all_fixed": fixed,
         "impact_all_fixed": fixed - as_is,
     }
+
+
+def make_wind_dynamic_refs(path: str) -> dict:
+    """A model that builds a reference at run time, so the static graph cannot be trusted.
+
+    INDIRECT("Scenarios!B"&selector) reaches a sheet and a cell that no formula names in
+    plain text. With that in the workbook, "nothing reads this" is a guess, not a fact, so
+    unused-input and abandoned-sheet findings should drop to information with a warning.
+    """
+    p = WIND
+    wb = Workbook()
+    _wind_body(wb, p, p["cuf"], [["Insurance", INSURANCE_RATE, "% of capex p.a."], ["Scenario", 2, "#"]])
+    wb["Summary"].append(["CUF from the scenario tab", '=INDIRECT("Scenarios!C"&(Assumptions!B16+1))'])
+    sc = wb.create_sheet("Scenarios")
+    sc.append(["#", "Scenario", "CUF"])
+    sc.append([1, "Base", 0.34])
+    sc.append([2, "High", 0.36])
+    old = wb.create_sheet("OLD_assumptions")
+    old.append(["Tariff", 3.9])
+    old.sheet_state = "hidden"
+    wb.save(path)
+    return {
+        "equity_irr_cell": "Summary!B2",
+        "tariff_cell": "Assumptions!B5",
+        "orphan_input_cell": "Assumptions!B15",
+        "legacy_sheet": "OLD_assumptions",
+        "dynamic_cell": "Summary!B5",
+        "target_irr": 0.12,
+    }
+
+
+RENAMED_HURDLE = 0.11  # written into the workbook, so it must win over the A-01 default
+
+
+def make_renamed_labels(path: str) -> dict:
+    """The wind model with nothing called by the names we first looked for, and no named ranges.
+
+    "Levellised tariff (Rs/kWh)" instead of Tariff, "IRR to equity" instead of Equity IRR, a
+    "Hurdle" row the model itself carries, "Operating expenses" instead of O&M and "Total
+    investment" instead of capex. The numbers are the same; only the words changed.
+    """
+    p = WIND
+    wb = Workbook()
+    a = wb.active
+    a.title = "Inputs"
+    a["A1"] = "PROJECT INPUTS"
+    a.append(["Item", "Value", "Unit"])
+    for row in [
+        ("Installed capacity", p["capacity_mw"], "MW"),
+        ("Plant load factor", p["cuf"], "fraction"),
+        ("Levellised tariff (Rs/kWh)", p["tariff"], ""),
+        ("Investment per MW", p["capex_cr_per_mw"], "Rs Cr/MW"),
+        ("Operating expenses", p["om_lakh_per_mw"], "Rs lakh/MW/yr"),
+        ("Opex escalation", p["om_escalation"], "fraction"),
+        ("Gearing", p["debt_share"], "fraction"),
+        ("Cost of debt", p["interest"], "fraction"),
+        ("Repayment period", p["tenor"], "yrs"),
+        ("Tax", p["tax"], "fraction"),
+        ("Asset life", p["dep_life"], "yrs"),
+        ("Availability loss", p["availability_loss"], "fraction"),
+    ]:
+        a.append(list(row))  # rows 3..14, same positions as the wind body
+    a.append(["Insurance", INSURANCE_RATE, "% of total investment p.a."])  # row 15, unreferenced
+    a.append(["Hurdle", RENAMED_HURDLE, "fraction"])  # row 16, unreferenced on purpose
+
+    s = wb.create_sheet("Cashflow")
+    s.append(
+        [
+            "Year",
+            "Energy (MU)",
+            "Sales",
+            "Operating expenses",
+            "Operating margin",
+            "Debt b/f",
+            "Finance cost",
+            "Repayment",
+            "Debt c/f",
+            "Depreciation",
+            "Profit before tax",
+            "Tax",
+            "",
+            "Cash to equity",
+        ]
+    )
+    A = "Inputs!"
+    s.append([0, 0, 0, 0, 0, 0, 0, 0, f"={A}$B$3*{A}$B$6*{A}$B$9", 0, 0, 0, None, f"=-({A}$B$3*{A}$B$6*(1-{A}$B$9))"])
+    for r in range(3, 3 + p["years"]):
+        s.append(
+            [
+                f"=A{r - 1}+1",
+                f"={A}$B$3*{A}$B$4*8766/1000*(1-{A}$B$14)",
+                f"=B{r}*{A}$B$5/10",
+                f"=-{A}$B$3*{A}$B$7*(1+{A}$B$8)^(A{r}-1)/100",
+                f"=C{r}+D{r}",
+                f"=I{r - 1}",
+                f"=-F{r}*{A}$B$10",
+                f"=-IF(A{r}<={A}$B$11,$I$2/{A}$B$11,0)",
+                f"=F{r}+H{r}",
+                f"=-{A}$B$3*{A}$B$6/{A}$B$13",
+                f"=E{r}+G{r}+J{r}",
+                f"=-MAX(0,K{r}*{A}$B$12)",
+                None,
+                f"=E{r}+G{r}+H{r}+L{r}",
+            ]
+        )
+    last = 2 + p["years"]
+    m = wb.create_sheet("Results")
+    m.append(["Metric", "Value"])
+    m.append(["IRR to equity", f"=IRR(Cashflow!N2:N{last})"])
+    m.append(["Total investment (Rs Cr)", f"={A}B3*{A}B6"])
+    wb.save(path)
+
+    as_is = wind_breakeven(RENAMED_HURDLE, p)
+    with_insurance = wind_breakeven(RENAMED_HURDLE, p, insurance=True)
+    return {
+        "equity_irr_cell": "Results!B2",
+        "tariff_cell": "Inputs!B5",
+        "hurdle_cell": "Inputs!B16",
+        "hurdle": RENAMED_HURDLE,
+        "orphan_input_cell": "Inputs!B15",
+        "om_row_cells": [f"Cashflow!D{r}" for r in range(3, 3 + p["years"])],
+        "equity_irr": wind_equity_irr(p),
+        "breakeven": as_is,
+        "impact_insurance": with_insurance - as_is,
+    }

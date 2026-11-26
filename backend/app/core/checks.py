@@ -35,7 +35,6 @@ CURRENT_TOKEN = "{current}"  # what an append patch expands to; see contracts.Fi
 
 STALE_BAND = 0.20  # a noted number this close to the live answer is talking about the same thing
 STALE_TOLERANCE = 0.005  # and this far from it is out of date
-BIG_IMPACT = 0.01  # INR/kWh; a mismatch worth at least a paisa is a high finding
 
 
 @dataclass
@@ -81,8 +80,62 @@ def _fmt(value: Any) -> str:
     return f"{value}"
 
 
-def _severity_for(impact: float | None, when_priced: str, when_not: str) -> str:
-    return when_priced if impact is not None else when_not
+HIGH_IMPACT = 0.01  # INR/kWh: a paisa or more
+MEDIUM_IMPACT = 0.001  # a tenth of a paisa or more
+DYNAMIC_NOTE = " This workbook builds references at run time, so it may be referenced dynamically."
+
+
+def severity_from(impact: float | None) -> str:
+    """Severity follows what the problem is worth, not which check found it.
+
+    A paisa or more is high, a tenth of a paisa is medium, anything smaller is low. Something we
+    could not price is medium: it might be worth a lot, and saying "low" would hide that.
+    """
+    if impact is None:
+        return "medium"
+    size = abs(impact)
+    if size >= HIGH_IMPACT:
+        return "high"
+    return "medium" if size >= MEDIUM_IMPACT else "low"
+
+
+def dynamic_references(book) -> list[str]:
+    """Cells whose references are built at run time: INDIRECT on a built string, or a table.
+
+    The static reference graph cannot see through these, so "nothing reads this cell" becomes a
+    guess. Callers downgrade unused-input and abandoned-sheet findings when any exist.
+    """
+    found = []
+    for ws in book.worksheets:
+        for row in ws.iter_rows():
+            for cell in row:
+                if not (isinstance(cell.value, str) and cell.value.startswith("=")):
+                    continue
+                if _builds_references(cell.value):
+                    found.append(_ref(ws.title, cell.coordinate))
+    return found
+
+
+def _builds_references(formula: str) -> bool:
+    try:
+        tokens = [t for t in Tokenizer(formula).items if t.type != Token.WSPACE]
+    except Exception:
+        return False
+    if any(t.type == Token.OPERAND and t.subtype == Token.RANGE and "[" in t.value for t in tokens):
+        return True  # a structured table reference
+    for i, tok in enumerate(tokens):
+        if tok.type != Token.FUNC or tok.subtype != Token.OPEN or tok.value.upper() != "INDIRECT(":
+            continue
+        inside = tokens[
+            i + 1 : next(
+                j
+                for j in range(i + 1, len(tokens))
+                if tokens[j].type == Token.FUNC and tokens[j].subtype == Token.CLOSE
+            )
+        ]
+        if not (len(inside) == 1 and inside[0].type == Token.OPERAND and inside[0].subtype == Token.TEXT):
+            return True  # INDIRECT on anything other than one literal string
+    return False
 
 
 # ---------- a number typed over a formula ----------
@@ -102,7 +155,7 @@ def typed_over_findings(model: Model) -> list[Finding]:
             Finding(
                 id="hardcode_in_formula_row",
                 where=ref,
-                severity="high",
+                severity=severity_from(impact),
                 title=f"A number is typed over the formula in {run.sheet} {_line_name(run)}",
                 evidence=(
                     f"{ref} holds {_fmt(model.value_of(ref))}. Every other cell from {run.cells[0]} to "
@@ -189,18 +242,19 @@ def truncated_range_findings(model: Model) -> list[Finding]:
                     short, full = found
                     fixed = cell.value[1:].replace(short, full)
                     fix = Fix(formula_patches={ref: fixed}, note="Cover the whole series the model already holds.")
+                    impact = model.price(fix)
                     findings.append(
                         Finding(
                             id="truncated_range",
                             where=ref,
-                            severity="medium",
+                            severity=severity_from(impact),
                             title=f"{ref} aggregates a range that stops before the data does",
                             evidence=(
                                 f"{cell.value} covers {short} but the series runs to {full.rsplit(':', 1)[1]}. "
                                 f"It reads {_fmt(model.value_of(ref))} now and "
                                 f"{_fmt(_with(model, fix, ref))} over the full range."
                             ),
-                            impact_inr_per_kwh=model.price(fix),
+                            impact_inr_per_kwh=impact,
                             fix=fix,
                         )
                     )
@@ -233,7 +287,9 @@ def _wiring_base(model: Model, noun: str) -> dict[str, Any] | None:
                 if ref in in_a_run or not isinstance(cell.value, str) or not cell.value.startswith("="):
                     continue
                 reads = {f"{s}!{c}" for s, c in _refs_of(model, cell.value, ws.title)}
-                if not reads & seeds:
+                # The total is either named after the noun itself ("Total investment") or is what
+                # the cells named after it feed ("Capex" per MW into "Total project cost").
+                if ref not in seeds and not reads & seeds:
                     continue
                 label = _label_of(model, ref)
                 if not label or not TOTAL_WORDS.search(label) or PER_UNIT.search(units.get(ref, "")):
@@ -326,7 +382,7 @@ def unused_input_findings(model: Model) -> list[Finding]:
                 Finding(
                     id="cosmetic_input",
                     where=ref,
-                    severity="low",
+                    severity=severity_from(0.0),
                     title=f"Changing {label} does nothing",
                     evidence=(
                         f"{ref} holds {_fmt(value)} and no formula reads it. The model already runs for "
@@ -347,21 +403,22 @@ def unused_input_findings(model: Model) -> list[Finding]:
                 Finding(
                     id="orphan_input",
                     where=ref,
-                    severity="medium",
+                    severity=severity_from(None),
                     title=f"{label} is entered but never charged",
                     evidence=evidence + " We could not work out which row it belongs in, so it is not priced.",
                 )
             )
             continue
         fix, base_label = wired
+        impact = model.price(fix)
         findings.append(
             Finding(
                 id="orphan_input",
                 where=ref,
-                severity="high",
+                severity=severity_from(impact),
                 title=f"{label} is entered but never charged",
                 evidence=evidence + f" Charging it against {base_label} is what the fix does.",
-                impact_inr_per_kwh=model.price(fix),
+                impact_inr_per_kwh=impact,
                 fix=fix,
             )
         )
@@ -390,7 +447,7 @@ def stale_note_findings(model: Model) -> list[Finding]:
                         Finding(
                             id="stale_note",
                             where=_ref(ws.title, cell.coordinate),
-                            severity="medium",
+                            severity=severity_from(0.0),
                             title="A note records a number the model no longer gives",
                             evidence=f'"{text.strip()}" says {raw}, but the model breaks even at {live:.4f} today.',
                             impact_inr_per_kwh=0.0,
@@ -426,7 +483,7 @@ def whole_number_percent_findings(model: Model) -> list[Finding]:
                 Finding(
                     id="whole_number_percent",
                     where=entry["cell"],
-                    severity="low",
+                    severity=severity_from(0.0),
                     title=f"{label} is stored as a whole number, so it is easy to break when someone edits it",
                     evidence=(
                         f'{entry["cell"]} holds {_fmt(value)} with the unit "{unit}" and is divided by 100 '
@@ -447,7 +504,7 @@ def legacy_sheet_findings(model: Model) -> list[Finding]:
         Finding(
             id="legacy_sheet",
             where=sheet["name"],
-            severity="low",
+            severity=severity_from(0.0),
             title=f"{sheet['name']} looks like an old copy that was left behind",
             evidence=(
                 f"{sheet['name']} is {sheet['state']}, holds {sheet['numbers']} numbers and no formulas, "
@@ -472,11 +529,10 @@ def _field(fact: Any, name: str, default: Any = None) -> Any:
 
 def _mismatch(model: Model, ref: str, title: str, evidence: str, fix: Fix, clauses, assumptions=()) -> Finding:
     impact = model.price(fix)
-    big = impact is not None and abs(impact) >= BIG_IMPACT
     return Finding(
         id="tender_mismatch",
         where=ref,
-        severity="high" if big else "medium",
+        severity=severity_from(impact),
         title=title,
         evidence=evidence,
         impact_inr_per_kwh=impact,
@@ -575,7 +631,7 @@ def unsupported_function_findings(model: Model) -> list[Finding]:
         Finding(
             id="unsupported_function",
             where=cells[0],
-            severity="medium",
+            severity=severity_from(None),
             title=f"{name} is not supported by our formula engine",
             evidence=(
                 f"{name} is used in {len(cells)} cell(s): {', '.join(cells[:6])}"

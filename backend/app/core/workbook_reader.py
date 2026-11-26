@@ -107,9 +107,13 @@ def _label_above(ws, row: int, col: int) -> str | None:
     return None
 
 
+MAX_UNIT_LENGTH = 48  # "% of total investment p.a." is 26; a note column is far longer than this
+
+
 def _unit_right(ws, row: int, col: int) -> str | None:
+    """The unit, if the cell to the right holds a short piece of text rather than a note."""
     v = ws.cell(row=row, column=col + 1).value
-    if isinstance(v, str) and 0 < len(v.strip()) <= 24 and not v.startswith("="):
+    if isinstance(v, str) and 0 < len(v.strip()) <= MAX_UNIT_LENGTH and not v.startswith("="):
         return v.strip()
     return None
 
@@ -256,28 +260,53 @@ def label_for(book, ref: str) -> str | None:
     return _name_of(ws, cell, row_numbers)[0]
 
 
+DEFAULT_HURDLE = 0.14  # A-01: the board's equity IRR hurdle, used when the workbook does not state one
+
+# Labels we look for, best first. A model that calls things by other names still has to resolve,
+# so each list goes from the exact phrase to the loosest one that is still unambiguous.
+LABELS = {
+    "tariff": [r"^tariff", r"tariff.*kwh|kwh.*tariff", r"tariff"],
+    "equity_irr": [r"equity irr", r"irr.*equity|equity.*irr"],
+    "min_dscr": [r"min(imum)? dscr", r"dscr"],
+    "hurdle": [r"hurdle", r"target.*irr|irr.*target", r"required.*(irr|return)"],
+}
+
+
 def key_cells(path: str, defined_names: dict[str, str] | None = None) -> dict[str, str | None]:
-    """The three cells every module needs: the tariff input, equity IRR and minimum DSCR.
+    """The cells every module needs: the tariff input, equity IRR, minimum DSCR and the hurdle.
 
     Found by label, so a workbook we have never seen resolves the same way the sample does.
     A defined name called Tariff wins, because that is what the model's own formulas use.
     """
     named_tariff = any(name.upper() == "TARIFF" for name in (defined_names or {}))
-    return {
-        "tariff": "Tariff" if named_tariff else find_by_label({}, [r"^tariff"], path),
-        "equity_irr": find_by_label({}, [r"equity irr"], path),
-        "min_dscr": find_by_label({}, [r"min(imum)? dscr"], path),
-    }
+    cells = {key: find_by_label({}, patterns, path) for key, patterns in LABELS.items()}
+    if named_tariff:
+        cells["tariff"] = "Tariff"
+    return cells
+
+
+def hurdle_for(path: str) -> float:
+    """The equity IRR hurdle: the workbook's own if it states one, else the register's A-01."""
+    cell = key_cells(path)["hurdle"]
+    if cell is None:
+        return DEFAULT_HURDLE
+    sheet, coord = cell.rsplit("!", 1)
+    value = load_workbook(path, data_only=True)[sheet][coord].value
+    if isinstance(value, (int, float)) and not isinstance(value, bool) and 0 < value < 1:
+        return float(value)
+    return DEFAULT_HURDLE
 
 
 def find_by_label(structure: dict[str, Any], patterns: list[str], wb_path: str) -> str | None:
-    """First cell whose left label matches any pattern (case-insensitive). Used for defaults only."""
+    """The cell to the right of the first label matching a pattern, trying patterns best first."""
     wb = load_workbook(wb_path, data_only=False)
-    regs = [re.compile(p, re.I) for p in patterns]
-    for ws in wb.worksheets:
-        for row in ws.iter_rows():
-            for c in row:
-                if isinstance(c.value, str) and any(r.search(c.value) for r in regs) and not c.value.startswith("="):
+    for pattern in patterns:
+        reg = re.compile(pattern, re.I)
+        for ws in wb.worksheets:
+            for row in ws.iter_rows():
+                for c in row:
+                    if not (isinstance(c.value, str) and not c.value.startswith("=") and reg.search(c.value)):
+                        continue
                     for col in range(c.column + 1, min(c.column + 4, ws.max_column + 1)):
                         target = ws.cell(row=c.row, column=col)
                         is_plain_text = isinstance(target.value, str) and not target.value.startswith("=")

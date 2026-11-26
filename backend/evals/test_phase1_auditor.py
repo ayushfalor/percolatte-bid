@@ -410,3 +410,85 @@ def test_typed_over_values_at_both_ends_of_a_row(edge_typed_over_workbook):
     fixes = [f.fix for f in findings if f.id == "hardcode_in_formula_row" and f.fix]
     got = breakeven_with_fixes(str(path), fixes, target_irr=truth["target_irr"])
     assert got - truth["breakeven"] == pytest.approx(truth["impact_all_fixed"], abs=1e-3)
+
+
+def test_severity_follows_impact_not_check_type(findings):
+    """A paisa or more is high, a tenth of a paisa is medium, less is low; unpriced is medium."""
+    from app.core.checks import severity_from
+
+    for f in findings:
+        if f.severity == "info":
+            continue  # a target to aim at, or a loop we solved: information, not a problem
+        assert f.severity == severity_from(f.impact_inr_per_kwh), (f.id, f.where, f.impact_inr_per_kwh)
+
+
+def test_dynamic_references_hedge_graph_based_findings(dynamic_refs_workbook):
+    """INDIRECT on a built string means "nothing reads this" is a guess. Say so, at info."""
+    from openpyxl import load_workbook
+
+    from app.core.audit import audit_workbook
+    from app.core.checks import dynamic_references
+
+    path, truth = dynamic_refs_workbook
+    assert dynamic_references(load_workbook(str(path))) == [truth["dynamic_cell"]]
+
+    findings = audit_workbook(str(path), target_irr=truth["target_irr"])
+    hedged = {f.where: f for f in findings if f.id in {"orphan_input", "legacy_sheet", "cosmetic_input"}}
+    assert truth["orphan_input_cell"] in hedged and truth["legacy_sheet"] in hedged, sorted(hedged)
+    for f in hedged.values():
+        assert f.severity == "info", (f.id, f.where, f.severity)
+        assert "referenced dynamically" in f.evidence, f.evidence
+
+
+def test_renamed_labels_are_still_found(renamed_workbook):
+    """ "Levellised tariff (Rs/kWh)", "IRR to equity", "Hurdle": same cells, different words."""
+    from app.core.workbook_reader import hurdle_for, key_cells
+
+    path, truth = renamed_workbook
+    cells = key_cells(str(path))
+    assert cells["tariff"] == truth["tariff_cell"], cells
+    assert cells["equity_irr"] == truth["equity_irr_cell"], cells
+    assert cells["hurdle"] == truth["hurdle_cell"], cells
+    assert hurdle_for(str(path)) == pytest.approx(truth["hurdle"])
+
+
+def test_hurdle_falls_back_to_the_register(wind_workbook):
+    """No hurdle anywhere in the workbook, so A-01 applies."""
+    from app.core.workbook_reader import DEFAULT_HURDLE, hurdle_for
+
+    path, _ = wind_workbook
+    assert hurdle_for(str(path)) == DEFAULT_HURDLE == 0.14
+
+
+def test_renamed_model_prices_insurance_against_total_investment(renamed_workbook):
+    """ "Operating expenses" is found through the tariff, "Total investment" through its own name."""
+    from app.core.audit import audit_workbook
+
+    path, truth = renamed_workbook
+    findings = audit_workbook(str(path))  # the hurdle comes from the workbook itself
+    orphan = [f for f in findings if f.id == "orphan_input" and f.where == truth["orphan_input_cell"]]
+    assert orphan and orphan[0].fix, [(f.id, f.where) for f in findings]
+    assert set(orphan[0].fix.touches) == set(truth["om_row_cells"])
+    assert orphan[0].impact_inr_per_kwh == pytest.approx(truth["impact_insurance"], abs=1e-3)
+
+
+def test_unrecognised_model_says_what_it_could_not_find(tmp_path):
+    """No label we know. The error names the missing cells, and explicit cells unblock it."""
+    from openpyxl import Workbook
+
+    from app.core.audit import AuditError, audit_workbook
+
+    path = tmp_path / "nolabels.xlsx"
+    book = Workbook()
+    ws = book.active
+    ws.title = "S"
+    ws["A1"], ws["B1"] = "price", 3.0
+    ws["A2"], ws["B2"] = "return", "=B1/10-0.2"
+    book.save(path)
+
+    with pytest.raises(AuditError) as err:
+        audit_workbook(str(path))
+    assert "tariff" in str(err.value) and "equity IRR" in str(err.value) and "explicitly" in str(err.value)
+
+    findings = audit_workbook(str(path), cells={"tariff": "S!B1", "equity_irr": "S!B2"}, target_irr=0.12)
+    assert isinstance(findings, list)
